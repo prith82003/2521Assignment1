@@ -280,7 +280,7 @@ static void runInsert(Tree t)
 
 static void runHelp()
 {
-	printf("+: Add elements to tree\n-: Delete Element from Tree\np: Print Tree, -l for level order, -L for detailed level order, -v for detailed in order\ns: Search for element\nc: Clear stdout\n?: Help\n");
+	printf("+: Add elements to tree\n-: Delete Element from Tree\np: Print Tree, -l for level order, -L for detailed level order, -v for detailed in order\ns: Search for element\nc: Clear stdout\nw: Save Current BST to File\nl: Load BST from file if it exists\n?: Help\n");
 }
 
 static void runDelete(Tree t)
