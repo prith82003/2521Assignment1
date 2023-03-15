@@ -119,7 +119,7 @@ bool TreeInsert(Tree t, int key)
 {
 	if (TreeSearch(t, key))
 	{
-		fprintf(stderr, "Value already Exists in Tree");
+		fprintf(stderr, "Value %d already Exists in Tree", key);
 		return false;
 	}
 
@@ -169,7 +169,6 @@ static Node NodeInsert(Node curr, Node n)
 	else
 		curr->right = NodeInsert(curr->right, n);
 
-	curr->height = 1 + max(Height(curr->left), Height(curr->right));
 	int balanceFactor = Height(curr->left) - Height(curr->right);
 	bool balanced = (abs(balanceFactor) <= 1);
 
@@ -206,6 +205,7 @@ static Node NodeInsert(Node curr, Node n)
 		}
 	}
 
+	curr->height = 1 + max(Height(curr->left), Height(curr->right));
 	return curr;
 }
 
@@ -294,7 +294,8 @@ static Node NodeDelete(Node n, int key)
 		n->right = NodeDelete(n->right, key);
 	else if (key < n->key)
 		n->left = NodeDelete(n->left, key);
-	else {
+	else
+	{
 		return NULL;
 	}
 

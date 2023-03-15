@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <sys/stat.h>
 
 #include "Queue.h"
 #include "bBST.h"
@@ -26,9 +27,17 @@ struct queue
 
 static Element newNode(Item it);
 
-static void runInsert();
-static void runDelete();
-static void runPrint();
+static void runInsert(Tree t);
+static void runDelete(Tree t);
+static void runPrint(Tree t, char buf);
+static void runQuit(Tree t);
+static void runSearch(Tree t);
+static void InOrderDetailedPrint(Node n, int parent);
+static void runClear();
+static void runHelp();
+static void runSave(Tree t);
+static Tree runLoad(Tree t);
+static bool FileExists(char *filename);
 
 /**
  * Creates a new empty queue
@@ -154,7 +163,7 @@ void QueueDump(Queue q, FILE *fp)
 	fprintf(fp, "\n");
 }
 
-void BSTreeLevelOrder(Node t)
+void BSTreeLevelOrder(Node t, bool full, FILE *fp)
 {
 	if (t == NULL)
 		return;
@@ -164,21 +173,23 @@ void BSTreeLevelOrder(Node t)
 	while (!QueueIsEmpty(q))
 	{
 		Node item = QueueDequeue(q);
-		for (int i = 0; i < item->height; i++)
-		{
-			printf("\t");
-		}
-		printf("%d\n", item->key);
+
+		if (full)
+			fprintf(fp, "{\n\tElement: %d\n\tLevel: %d\n}\n", item->key, item->height);
+		else
+			fprintf(fp, "%d ", item->key);
+
 		if (item->left != NULL)
 			QueueEnqueue(q, item->left);
 		if (item->right != NULL)
 			QueueEnqueue(q, item->right);
 	}
 
+	printf("\n");
 	QueueFree(q);
 }
 
-void InOrderPrint(Node n)
+static void InOrderPrint(Node n)
 {
 	if (n == NULL)
 		return;
@@ -192,41 +203,175 @@ void InOrderPrint(Node n)
 	InOrderPrint(n->right);
 }
 
+static void InOrderDetailedPrint(Node n, int parent)
+{
+	if (n == NULL)
+		return;
+
+	InOrderDetailedPrint(n->left, n->key);
+
+	printf("{\n\tElement: %d\n\tLevel: %d\n\tParent: %d\n}\n", n->key, n->height, parent);
+
+	InOrderDetailedPrint(n->right, n->key);
+}
+
 int main(void)
 {
 	Tree t = TreeNew();
 	int commandLoop = 1;
 
-	while (commandLoop) {
+	while (commandLoop)
+	{
 		char command = '\0';
-		scanf(" %c ", &command);
+		char buf = '\0';
+		printf("> ");
+		scanf(" %c%c", &command, &buf);
 
-		switch(command) {
-			case '+':
-				runInsert();
-				break;
-			case '-':
-				runDelete();
-				break;
-			case 'p':
-				runPrint();
-				break;
-			default:
-				printf("Invalid Input");
+		switch (command)
+		{
+		case '+':
+			runInsert(t);
+			break;
+		case '-':
+			runDelete(t);
+			break;
+		case 'p':
+			runPrint(t, buf);
+			break;
+		case 'q':
+			runQuit(t);
+		case 's':
+			runSearch(t);
+			break;
+		case 'c':
+			runClear();
+			break;
+		case '?':
+			runHelp();
+			break;
+		case 'w':
+			runSave(t);
+			break;
+		case 'l':
+			t = runLoad(t);
+			break;
+		default:
+			printf("Invalid Input: %c.\n", command);
 		}
 	}
 
+	runQuit(t);
+}
+
+static void runInsert(Tree t)
+{
+	char buffer = '\0';
+	int digit = 0;
+
+	printf("Run Insert\n");
+
+	do
+	{
+		scanf(" %d%c", &digit, &buffer);
+		if (!TreeInsert(t, digit))
+			return;
+	} while (buffer != '\n');
+}
+
+static void runHelp()
+{
+	printf("+: Add elements to tree\n-: Delete Element from Tree\np: Print Tree, -l for level order, -L for detailed level order, -v for detailed in order\ns: Search for element\nc: Clear stdout\n?: Help\n");
+}
+
+static void runDelete(Tree t)
+{
+	printf("Running Delete\n");
+}
+
+static void runPrint(Tree t, char buf)
+{
+	if (buf != '\n')
+	{
+		char option = '0';
+		char d = '0';
+
+		scanf(" %c%c", &d, &option);
+
+		switch (option)
+		{
+		case 'l':
+			BSTreeLevelOrder(t->root, false, stdout);
+			break;
+		case 'L':
+			BSTreeLevelOrder(t->root, true, stdout);
+			break;
+		case 'v':
+			InOrderDetailedPrint(t->root, -1);
+			break;
+		default:
+			printf("Incorrect Usage\n");
+		}
+
+		return;
+	}
+
+	printf("Running Print:\n");
+	InOrderPrint(t->root);
+}
+
+static void runSearch(Tree t)
+{
+	int digit = 0;
+	char buf = '\0';
+
+	scanf(" %d%c", &digit, &buf);
+	bool search = TreeSearch(t, digit);
+
+	printf("Element %d was %s.\n", digit, (search) ? "found" : "not found");
+}
+
+static void runClear()
+{
+	system("clear");
+}
+
+static void runSave(Tree t)
+{
+	FILE *fp = fopen("data.bst", "w");
+	BSTreeLevelOrder(t->root, false, fp);
+	fclose(fp);
+}
+
+static Tree runLoad(Tree t)
+{
+	if (!FileExists("data.bst"))
+	{
+		printf("No Save File Exists\n");
+		return t;
+	}
+
 	TreeFree(t);
+	t = NULL;
+	t = TreeNew();
+
+	FILE *fp = fopen("data.bst", "r");
+
+	int elem = 0;
+	while (fscanf(fp, " %d", &elem) != -1)
+		TreeInsert(t, elem);
+
+	fclose(fp);
+	return t;
 }
 
-static void runInsert() {
-	
+static void runQuit(Tree t)
+{
+	TreeFree(t);
+	exit(EXIT_SUCCESS);
 }
 
-static void runDelete() {
-
-}
-
-static void runPrint() {
-
+static bool FileExists(char *filename)
+{
+	struct stat buffer;
+	return (stat(filename, &buffer) == 0);
 }
