@@ -5,6 +5,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <ctype.h>
 
 #include "Queue.h"
 #include "bBST.h"
@@ -12,35 +13,39 @@
 typedef struct element *Element;
 struct element
 {
-    Item item;
-    Element next;
+	Item item;
+	Element next;
 };
 
 struct queue
 {
-    Element head;
-    Element tail;
-    int size;
+	Element head;
+	Element tail;
+	int size;
 };
 
 static Element newNode(Item it);
+
+static void runInsert();
+static void runDelete();
+static void runPrint();
 
 /**
  * Creates a new empty queue
  */
 Queue QueueNew(void)
 {
-    Queue q = malloc(sizeof(*q));
-    if (q == NULL)
-    {
-        fprintf(stderr, "couldn't allocate Queue\n");
-        exit(EXIT_FAILURE);
-    }
+	Queue q = malloc(sizeof(*q));
+	if (q == NULL)
+	{
+		fprintf(stderr, "couldn't allocate Queue\n");
+		exit(EXIT_FAILURE);
+	}
 
-    q->head = NULL;
-    q->tail = NULL;
-    q->size = 0;
-    return q;
+	q->head = NULL;
+	q->tail = NULL;
+	q->size = 0;
+	return q;
 }
 
 /**
@@ -48,14 +53,14 @@ Queue QueueNew(void)
  */
 void QueueFree(Queue q)
 {
-    Element curr = q->head;
-    while (curr != NULL)
-    {
-        Element temp = curr;
-        curr = curr->next;
-        free(temp);
-    }
-    free(q);
+	Element curr = q->head;
+	while (curr != NULL)
+	{
+		Element temp = curr;
+		curr = curr->next;
+		free(temp);
+	}
+	free(q);
 }
 
 /**
@@ -63,31 +68,31 @@ void QueueFree(Queue q)
  */
 void QueueEnqueue(Queue q, Item it)
 {
-    Element n = newNode(it);
-    if (q->size == 0)
-    {
-        q->head = n;
-    }
-    else
-    {
-        q->tail->next = n;
-    }
-    q->tail = n;
-    q->size++;
+	Element n = newNode(it);
+	if (q->size == 0)
+	{
+		q->head = n;
+	}
+	else
+	{
+		q->tail->next = n;
+	}
+	q->tail = n;
+	q->size++;
 }
 
 static Element newNode(Item it)
 {
-    Element n = malloc(sizeof(*n));
-    if (n == NULL)
-    {
-        fprintf(stderr, "couldn't allocate Node\n");
-        exit(EXIT_FAILURE);
-    }
+	Element n = malloc(sizeof(*n));
+	if (n == NULL)
+	{
+		fprintf(stderr, "couldn't allocate Node\n");
+		exit(EXIT_FAILURE);
+	}
 
-    n->item = it;
-    n->next = NULL;
-    return n;
+	n->item = it;
+	n->next = NULL;
+	return n;
 }
 
 /**
@@ -96,18 +101,18 @@ static Element newNode(Item it)
  */
 Item QueueDequeue(Queue q)
 {
-    assert(q->size > 0);
+	assert(q->size > 0);
 
-    Element newHead = q->head->next;
-    Item it = q->head->item;
-    free(q->head);
-    q->head = newHead;
-    if (newHead == NULL)
-    {
-        q->tail = NULL;
-    }
-    q->size--;
-    return it;
+	Element newHead = q->head->next;
+	Item it = q->head->item;
+	free(q->head);
+	q->head = newHead;
+	if (newHead == NULL)
+	{
+		q->tail = NULL;
+	}
+	q->size--;
+	return it;
 }
 
 /**
@@ -116,9 +121,9 @@ Item QueueDequeue(Queue q)
  */
 Item QueueFront(Queue q)
 {
-    assert(q->size > 0);
+	assert(q->size > 0);
 
-    return q->head->item;
+	return q->head->item;
 }
 
 /**
@@ -126,7 +131,7 @@ Item QueueFront(Queue q)
  */
 int QueueSize(Queue q)
 {
-    return q->size;
+	return q->size;
 }
 
 /**
@@ -134,7 +139,7 @@ int QueueSize(Queue q)
  */
 bool QueueIsEmpty(Queue q)
 {
-    return q->size == 0;
+	return q->size == 0;
 }
 
 /**
@@ -142,74 +147,86 @@ bool QueueIsEmpty(Queue q)
  */
 void QueueDump(Queue q, FILE *fp)
 {
-    for (Element curr = q->head; curr != NULL; curr = curr->next)
-    {
-        fprintf(fp, "%p ", curr->item);
-    }
-    fprintf(fp, "\n");
+	for (Element curr = q->head; curr != NULL; curr = curr->next)
+	{
+		fprintf(fp, "%p ", curr->item);
+	}
+	fprintf(fp, "\n");
 }
 
 void BSTreeLevelOrder(Node t)
 {
-    if (t == NULL)
-        return;
+	if (t == NULL)
+		return;
 
-    Queue q = QueueNew();
-    QueueEnqueue(q, t);
-    while (!QueueIsEmpty(q))
-    {
-        Node item = QueueDequeue(q);
-        for (int i = 0; i < item->height; i++)
-        {
-            printf("\t");
-        }
-        printf("%d\n", item->key);
-        if (item->left != NULL)
-            QueueEnqueue(q, item->left);
-        if (item->right != NULL)
-            QueueEnqueue(q, item->right);
-    }
+	Queue q = QueueNew();
+	QueueEnqueue(q, t);
+	while (!QueueIsEmpty(q))
+	{
+		Node item = QueueDequeue(q);
+		for (int i = 0; i < item->height; i++)
+		{
+			printf("\t");
+		}
+		printf("%d\n", item->key);
+		if (item->left != NULL)
+			QueueEnqueue(q, item->left);
+		if (item->right != NULL)
+			QueueEnqueue(q, item->right);
+	}
 
-    QueueFree(q);
+	QueueFree(q);
 }
 
 void InOrderPrint(Node n)
 {
-    if (n == NULL)
-        return;
+	if (n == NULL)
+		return;
 
-    InOrderPrint(n->left);
+	InOrderPrint(n->left);
 
-    for (int i = 0; i < n->height; i++)
-        printf("\t");
+	for (int i = 0; i < n->height; i++)
+		printf("\t");
 
-    printf("%d\n", n->key);
-    InOrderPrint(n->right);
+	printf("%d\n", n->key);
+	InOrderPrint(n->right);
 }
 
 int main(void)
 {
-    Tree t = TreeNew();
+	Tree t = TreeNew();
+	int commandLoop = 1;
 
-    /* Even BST */
-    // TreeInsert(t, 20);
-    // TreeInsert(t, 14);
-    // TreeInsert(t, 35);
-    // TreeInsert(t, 16);
-    // TreeInsert(t, 15);
-    // TreeInsert(t, 30);
-    // TreeInsert(t, 36);
+	while (commandLoop) {
+		char command = '\0';
+		scanf(" %c ", &command);
 
-    /* Uneven BST */
-    TreeInsert(t, 7);
-    TreeInsert(t, 6);
-    TreeInsert(t, 5);
-    TreeInsert(t, 4);
-    TreeInsert(t, 3);
-    TreeInsert(t, 2);
-    TreeInsert(t, 1);
+		switch(command) {
+			case '+':
+				runInsert();
+				break;
+			case '-':
+				runDelete();
+				break;
+			case 'p':
+				runPrint();
+				break;
+			default:
+				printf("Invalid Input");
+		}
+	}
 
-    // BSTreeLevelOrder(t->root);
-    InOrderPrint(t->root);
-    TreeFree(t);
+	TreeFree(t);
+}
+
+static void runInsert() {
+	
+}
+
+static void runDelete() {
+
+}
+
+static void runPrint() {
+
 }

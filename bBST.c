@@ -15,12 +15,6 @@
 ////////////////////////////////////////////////////////////////////////
 // Auxiliary function prototypes
 
-// Write Auxiliary function prototypes here, and declare them as static
-
-////////////////////////////////////////////////////////////////////////
-
-////////////////////////////////////////////////////////////////////////
-
 static void FreeNode(Node n);
 static bool NodeSearch(Node n, int k);
 static Node NodeCreate(int k);
@@ -32,7 +26,13 @@ static Node RightLeftCase(Node x, Node y, Node z);
 static int Height(Node n);
 static void UpdateHeight(Node n);
 static int max(int a, int b);
-static Node NodeDelete(Node current, int key);
+static Node NodeDelete(Node n, int key);
+
+// Write Auxiliary function prototypes here, and declare them as static
+
+////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////////
 
 /**
  * Creates a new empty tree.
@@ -161,7 +161,6 @@ static Node NodeCreate(int k)
 
 static Node NodeInsert(Node curr, Node n)
 {
-	// TODO: Update Heights of Nodes
 	if (curr == NULL)
 		return n;
 
@@ -285,9 +284,21 @@ bool TreeDelete(Tree t, int key)
 	return true;
 }
 
-static Node NodeDelete(Node current, int key)
+static Node NodeDelete(Node n, int key)
 {
-	return NULL;
+	// TODO: Delete
+	if (n == NULL)
+		return NULL;
+
+	if (key > n->key)
+		n->right = NodeDelete(n->right, key);
+	else if (key < n->key)
+		n->left = NodeDelete(n->left, key);
+	else {
+		return NULL;
+	}
+
+	return n;
 }
 
 ////////////////////////////////////////////////////////////////////////
