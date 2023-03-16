@@ -19,6 +19,7 @@ static void FreeNode(Node n);
 static bool NodeSearch(Node n, int k);
 static Node NodeCreate(int k);
 static Node NodeInsert(Node curr, Node n);
+static int GetBalance(Node n);
 static Node LeftLeftCase(Node x, Node y, Node z);
 static Node LeftRightCase(Node x, Node y, Node z);
 static Node RightRightCase(Node x, Node y, Node z);
@@ -27,6 +28,12 @@ static int Height(Node n);
 static void UpdateHeight(Node n);
 static int max(int a, int b);
 static Node NodeDelete(Node n, int key);
+static Node BalanceTree(Node curr, Node n, bool (*CheckCase)(Node, int));
+static Node GetNextNode(Node n);
+static Node GetSmallestNode(Node n);
+static bool CheckInsertCase(Node curr, int nKey);
+static bool CheckDeleteCase(Node curr, int leftCase);
+static void NodeToList(List l, Node curr);
 
 // Write Auxiliary function prototypes here, and declare them as static
 
@@ -123,6 +130,12 @@ bool TreeInsert(Tree t, int key)
 		return false;
 	}
 
+	if (key == UNDEFINED)
+	{
+		fprintf(stderr, "Can't Insert Undefined Value");
+		return false;
+	}
+
 	Node new = NodeCreate(key);
 
 	if (t->root == NULL)
@@ -137,12 +150,6 @@ bool TreeInsert(Tree t, int key)
 
 static Node NodeCreate(int k)
 {
-	if (k == UNDEFINED)
-	{
-		fprintf(stderr, "Can't Insert Undefined Value");
-		return NULL;
-	}
-
 	Node n = malloc(sizeof(*n));
 
 	if (n == NULL)
@@ -169,7 +176,12 @@ static Node NodeInsert(Node curr, Node n)
 	else
 		curr->right = NodeInsert(curr->right, n);
 
-	int balanceFactor = Height(curr->left) - Height(curr->right);
+	return BalanceTree(curr, n, CheckInsertCase);
+}
+
+static Node BalanceTree(Node curr, Node n, bool (*CheckCase)(Node, int))
+{
+	int balanceFactor = GetBalance(curr);
 	bool balanced = (abs(balanceFactor) <= 1);
 
 	if (!balanced)
@@ -177,9 +189,11 @@ static Node NodeInsert(Node curr, Node n)
 		Node x = NULL;
 		Node y = NULL;
 		Node z = curr;
+
 		if (balanceFactor > 1)
 		{
-			if (n->key < curr->left->key)
+			int nKey = (n == NULL) ? 1 : n->key;
+			if (CheckCase(curr->left, nKey))
 			{
 				y = z->left;
 				x = y->left;
@@ -192,7 +206,8 @@ static Node NodeInsert(Node curr, Node n)
 		}
 		else
 		{
-			if (n->key > curr->right->key)
+			int nKey = (n == NULL) ? 0 : n->key;
+			if (!CheckCase(curr->right, nKey))
 			{
 				y = z->right;
 				x = y->right;
@@ -207,6 +222,11 @@ static Node NodeInsert(Node curr, Node n)
 
 	curr->height = 1 + max(Height(curr->left), Height(curr->right));
 	return curr;
+}
+
+static int GetBalance(Node n)
+{
+	return Height(n->left) - Height(n->right);
 }
 
 static Node LeftLeftCase(Node x, Node y, Node z)
@@ -258,6 +278,11 @@ static Node RightLeftCase(Node x, Node y, Node z)
 	return x;
 }
 
+static bool CheckInsertCase(Node curr, int nKey)
+{
+	return nKey < curr->key;
+}
+
 static void UpdateHeight(Node n)
 {
 	n->height = 1 + max(Height(n->left), Height(n->right));
@@ -274,6 +299,12 @@ static void UpdateHeight(Node n)
  */
 bool TreeDelete(Tree t, int key)
 {
+	if (key == UNDEFINED)
+	{
+		fprintf(stderr, "Can't accept UNDEFINED as input");
+		return false;
+	}
+
 	if (!TreeSearch(t, key))
 	{
 		fprintf(stderr, "Value to Delete not in Tree");
@@ -284,22 +315,61 @@ bool TreeDelete(Tree t, int key)
 	return true;
 }
 
-static Node NodeDelete(Node n, int key)
+static Node NodeDelete(Node curr, int key)
 {
-	// TODO: Delete
-	if (n == NULL)
+	// TODO: Balance
+	if (curr == NULL)
 		return NULL;
 
-	if (key > n->key)
-		n->right = NodeDelete(n->right, key);
-	else if (key < n->key)
-		n->left = NodeDelete(n->left, key);
+	if (key > curr->key)
+		curr->right = NodeDelete(curr->right, key);
+	else if (key < curr->key)
+		curr->left = NodeDelete(curr->left, key);
 	else
+		return GetNextNode(curr);
+
+	return BalanceTree(curr, NULL, CheckDeleteCase);
+}
+
+static Node GetNextNode(Node n)
+{
+	// One/Zero Child Cases
+	if (n->right == NULL)
 	{
-		return NULL;
+		Node tempLeft = n->left;
+		free(n);
+		return tempLeft;
+	}
+	else if (n->left == NULL)
+	{
+		Node tempRight = n->right;
+		free(n);
+		return tempRight;
 	}
 
+	// Both Child Case
+	Node min = GetSmallestNode(n->right);
+	n->key = min->key;
+
+	n->right = NodeDelete(n->right, min->key);
 	return n;
+}
+
+static bool CheckDeleteCase(Node sub, int leftCase)
+{
+	int balanceSub = GetBalance(sub);
+	return (leftCase) ? balanceSub < 0 : balanceSub <= 0;
+}
+
+//! Replace with TreeKthSmallest Once Implemented
+static Node GetSmallestNode(Node n)
+{
+	Node curr = n;
+
+	while (curr != NULL && curr->left != NULL)
+		curr = curr->left;
+
+	return curr;
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -311,8 +381,19 @@ static Node NodeDelete(Node n, int key)
  */
 List TreeToList(Tree t)
 {
-	// List l = ListNew();
-	return NULL;
+	List l = ListNew();
+	NodeToList(l, t->root);
+	return l;
+}
+
+static void NodeToList(List l, Node curr)
+{
+	if (curr == NULL)
+		return;
+
+	NodeToList(l, curr->left);
+	ListAppend(l, curr->key);
+	NodeToList(l, curr->right);
 }
 
 ////////////////////////////////////////////////////////////////////////

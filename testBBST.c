@@ -189,18 +189,18 @@ void BSTreeLevelOrder(Node t, bool full, FILE *fp)
 	QueueFree(q);
 }
 
-static void InOrderPrint(Node n)
+static void InOrderPrint(Node n, int maxTab, int trueHeight)
 {
 	if (n == NULL)
 		return;
 
-	InOrderPrint(n->left);
+	InOrderPrint(n->left, maxTab, trueHeight + 1);
 
-	for (int i = 0; i < n->height; i++)
+	for (int i = 0; i < maxTab - trueHeight; i++)
 		printf("\t");
 
 	printf("%d\n", n->key);
-	InOrderPrint(n->right);
+	InOrderPrint(n->right, maxTab, trueHeight + 1);
 }
 
 static void InOrderDetailedPrint(Node n, int parent)
@@ -218,9 +218,8 @@ static void InOrderDetailedPrint(Node n, int parent)
 int main(void)
 {
 	Tree t = TreeNew();
-	int commandLoop = 1;
 
-	while (commandLoop)
+	while (1)
 	{
 		char command = '\0';
 		char buf = '\0';
@@ -256,7 +255,7 @@ int main(void)
 			t = runLoad(t);
 			break;
 		default:
-			printf("Invalid Input: %c.\n", command);
+			printf("Invalid Input: %c. Buffer: %c.\n", command, buf);
 		}
 	}
 
@@ -285,11 +284,25 @@ static void runHelp()
 
 static void runDelete(Tree t)
 {
-	printf("Running Delete\n");
+	char buffer = '\0';
+	int digit = 0;
+
+	printf("Run Insert\n");
+
+	do
+	{
+		scanf(" %d%c", &digit, &buffer);
+		if (!TreeDelete(t, digit))
+			return;
+	} while (buffer != '\n');
 }
 
 static void runPrint(Tree t, char buf)
 {
+	// TODO: Adjust Height tabbing. Use max to renormalise tab indents
+	// * Use Recursive to get max height
+	// * Print using new max height
+
 	if (buf != '\n')
 	{
 		char option = '0';
@@ -316,7 +329,8 @@ static void runPrint(Tree t, char buf)
 	}
 
 	printf("Running Print:\n");
-	InOrderPrint(t->root);
+	int maxHeight = (t->root == NULL) ? 0 : t->root->height;
+	InOrderPrint(t->root, maxHeight, 0);
 }
 
 static void runSearch(Tree t)
