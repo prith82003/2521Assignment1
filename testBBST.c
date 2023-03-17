@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <sys/stat.h>
+#include <string.h>
 
 #include "Queue.h"
 #include "bBST.h"
@@ -37,7 +38,13 @@ static void runClear();
 static void runHelp();
 static void runSave(Tree t);
 static Tree runLoad(Tree t);
+static void runCheckBalanced(Tree t);
+static int TreeCheckBalanced(Node n);
 static bool FileExists(char *filename);
+static int max(int a, int b);
+
+#define CHAR_ROW_MAX 100
+#define CHAR_COL_MAX 100
 
 /**
  * Creates a new empty queue
@@ -200,6 +207,7 @@ static void InOrderPrint(Node n, int maxTab, int trueHeight)
 		printf("\t");
 
 	printf("%d\n", n->key);
+
 	InOrderPrint(n->right, maxTab, trueHeight + 1);
 }
 
@@ -254,6 +262,9 @@ int main(void)
 		case 'l':
 			t = runLoad(t);
 			break;
+		case 'b':
+			runCheckBalanced(t);
+			break;
 		default:
 			printf("Invalid Input: %c. Buffer: %c.\n", command, buf);
 		}
@@ -279,7 +290,7 @@ static void runInsert(Tree t)
 
 static void runHelp()
 {
-	printf("+: Add elements to tree\n-: Delete Element from Tree\np: Print Tree, -l for level order, -L for detailed level order, -v for detailed in order\ns: Search for element\nc: Clear stdout\nw: Save Current BST to File\nl: Load BST from file if it exists\n?: Help\n");
+	printf("+: Add elements to tree\n-: Delete Element from Tree\np: Print Tree, -l for level order, -L for detailed level order, -v for detailed in order\ns: Search for element\nc: Clear stdout\nw: Save Current BST to File\nl: Load BST from file if it exists\nb: Check if tree is balanced\n?: Help\n");
 }
 
 static void runDelete(Tree t)
@@ -378,6 +389,26 @@ static Tree runLoad(Tree t)
 	return t;
 }
 
+static void runCheckBalanced(Tree t)
+{
+	bool balanced = TreeCheckBalanced(t->root);
+	printf("Tree is %sbalanced.\n", (balanced) ? "" : "not ");
+}
+
+static int TreeCheckBalanced(Node n)
+{
+	if (n == NULL)
+		return -1;
+
+	int left = TreeCheckBalanced(n->left);
+	int right = TreeCheckBalanced(n->right);
+
+	if (abs(left - right) > 1)
+		return 9999999;
+
+	return 1 + max(left, right);
+}
+
 static void runQuit(Tree t)
 {
 	TreeFree(t);
@@ -388,4 +419,9 @@ static bool FileExists(char *filename)
 {
 	struct stat buffer;
 	return (stat(filename, &buffer) == 0);
+}
+
+static int max(int a, int b)
+{
+	return (a > b) ? a : b;
 }
