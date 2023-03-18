@@ -317,7 +317,6 @@ bool TreeDelete(Tree t, int key)
 
 static Node NodeDelete(Node curr, int key)
 {
-	// TODO: Balance
 	if (curr == NULL)
 		return NULL;
 

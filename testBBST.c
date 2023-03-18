@@ -1,427 +1,434 @@
-// Implementation of the Queue ADT using a linked list
-
-// !!! DO NOT MODIFY THIS FILE !!!
-
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
 #include <sys/stat.h>
 #include <string.h>
+#include <stdbool.h>
 
-#include "Queue.h"
 #include "bBST.h"
 
-typedef struct element *Element;
-struct element
-{
-	Item item;
-	Element next;
-};
+typedef char *String;
+static bool getCommand(String buf);
+static String *tokenize(String s, int *ntokens);
+static void freeTokens(char **tokens);
 
-struct queue
-{
-	Element head;
-	Element tail;
-	int size;
-};
+void printCurrentLevel(Node root, int level, bool full, FILE *fp);
 
-static Element newNode(Item it);
-
-static void runInsert(Tree t);
-static void runDelete(Tree t);
-static void runPrint(Tree t, char buf);
-static void runQuit(Tree t);
-static void runSearch(Tree t);
+static void runInsert(Tree t, int argc, char **argv);
+static void runDelete(Tree t, int argc, char **argv);
+static void runPrint(Tree t, int argc, char **argv);
+static void runQuit(Tree t, int argc, char **argv);
+static void runSearch(Tree t, int argc, char **argv);
 static void InOrderDetailedPrint(Node n, int parent);
-static void runClear();
+static void InOrderNewPrint(Node n, int maxTab, int trueHeight, char ***InOrderString, int *counter);
+static void runClear(Tree t, int argc, char **argv);
 static void runHelp();
-static void runSave(Tree t);
-static Tree runLoad(Tree t);
-static void runCheckBalanced(Tree t);
+static void runSave(Tree t, int argc, char **argv);
+static void runLoad(Tree t, int argc, char **argv);
+static void runCheckBalanced(Tree t, int argc, char **argv);
 static int TreeCheckBalanced(Node n);
-static bool FileExists(char *filename);
+static bool FileExists(String filename);
 static int max(int a, int b);
+static int height(struct node *node);
 
 #define CHAR_ROW_MAX 100
 #define CHAR_COL_MAX 100
+#define MAX 8192
+#define NUM_COMMANDS 9
+
+typedef struct command
+{
+    String name;
+    void (*func)(Tree, int, char **);
+    String modifiers;
+    String help;
+} Command;
+
+typedef struct size
+{
+    int width;
+    int height;
+} Size;
+
+// Scan through file, each command has one letter associated to it, add that letter and its corresponding function and a fitting help message to the Commands array
+static Command Commands[NUM_COMMANDS] = {
+    {"+", runInsert, "", "Insert a new node into the tree"},
+    {"-", runDelete, "", "Delete a node from the tree"},
+    {"p", runPrint, "-[l, L, i] ",
+     "Print the tree"},
+    {"q", runQuit, "", "Quit the program"},
+    {"s", runSearch, "", "Search for a node in the tree"},
+    {"c", runClear, "", "Clear the tree"},
+    {"w", runSave, "", "Save the tree to a file"},
+    {"l", runLoad, "", "Load a tree from a file"},
+    {"b", runCheckBalanced, "-h ", "Check if the tree is balanced"}};
 
 /**
- * Creates a new empty queue
+ * Prints the BST in Level Order
+ * From: https://www.geeksforgeeks.org/level-order-tree-traversal/
  */
-Queue QueueNew(void)
-{
-	Queue q = malloc(sizeof(*q));
-	if (q == NULL)
-	{
-		fprintf(stderr, "couldn't allocate Queue\n");
-		exit(EXIT_FAILURE);
-	}
 
-	q->head = NULL;
-	q->tail = NULL;
-	q->size = 0;
-	return q;
+void PrintLevelOrder(Node root, bool full, FILE *fp)
+{
+    int h = height(root);
+    int i;
+    for (i = 1; i <= h; i++)
+        printCurrentLevel(root, i, full, fp);
+    fprintf(fp, "\n");
 }
 
-/**
- * Frees all resources associated with the given queue
- */
-void QueueFree(Queue q)
+/* Print nodes at a current level */
+void printCurrentLevel(Node root, int level, bool full, FILE *fp)
 {
-	Element curr = q->head;
-	while (curr != NULL)
-	{
-		Element temp = curr;
-		curr = curr->next;
-		free(temp);
-	}
-	free(q);
-}
-
-/**
- * Adds an item to the end of the queue
- */
-void QueueEnqueue(Queue q, Item it)
-{
-	Element n = newNode(it);
-	if (q->size == 0)
-	{
-		q->head = n;
-	}
-	else
-	{
-		q->tail->next = n;
-	}
-	q->tail = n;
-	q->size++;
-}
-
-static Element newNode(Item it)
-{
-	Element n = malloc(sizeof(*n));
-	if (n == NULL)
-	{
-		fprintf(stderr, "couldn't allocate Node\n");
-		exit(EXIT_FAILURE);
-	}
-
-	n->item = it;
-	n->next = NULL;
-	return n;
-}
-
-/**
- * Removes an item from the front of the queue and returns it
- * Assumes that the queue is not empty
- */
-Item QueueDequeue(Queue q)
-{
-	assert(q->size > 0);
-
-	Element newHead = q->head->next;
-	Item it = q->head->item;
-	free(q->head);
-	q->head = newHead;
-	if (newHead == NULL)
-	{
-		q->tail = NULL;
-	}
-	q->size--;
-	return it;
-}
-
-/**
- * Gets the item at the front of the queue without removing it
- * Assumes that the queue is not empty
- */
-Item QueueFront(Queue q)
-{
-	assert(q->size > 0);
-
-	return q->head->item;
-}
-
-/**
- * Gets the size of the given queue
- */
-int QueueSize(Queue q)
-{
-	return q->size;
-}
-
-/**
- * Returns true if the queue is empty, and false otherwise
- */
-bool QueueIsEmpty(Queue q)
-{
-	return q->size == 0;
-}
-
-/**
- * Prints the queue to the given file with items space-separated
- */
-void QueueDump(Queue q, FILE *fp)
-{
-	for (Element curr = q->head; curr != NULL; curr = curr->next)
-	{
-		fprintf(fp, "%p ", curr->item);
-	}
-	fprintf(fp, "\n");
-}
-
-void BSTreeLevelOrder(Node t, bool full, FILE *fp)
-{
-	if (t == NULL)
-		return;
-
-	Queue q = QueueNew();
-	QueueEnqueue(q, t);
-	while (!QueueIsEmpty(q))
-	{
-		Node item = QueueDequeue(q);
-
-		if (full)
-			fprintf(fp, "{\n\tElement: %d\n\tLevel: %d\n}\n", item->key, item->height);
-		else
-			fprintf(fp, "%d ", item->key);
-
-		if (item->left != NULL)
-			QueueEnqueue(q, item->left);
-		if (item->right != NULL)
-			QueueEnqueue(q, item->right);
-	}
-
-	printf("\n");
-	QueueFree(q);
+    if (root == NULL)
+        return;
+    if (level == 1)
+    {
+        if (!full)
+            fprintf(fp, "%d ", root->key);
+        else
+            fprintf(fp, "{\n\tElement: %d\n\tLevel: %d\n}\n", root->key, root->height);
+    }
+    else if (level > 1)
+    {
+        printCurrentLevel(root->left, level - 1, full, fp);
+        printCurrentLevel(root->right, level - 1, full, fp);
+    }
 }
 
 static void InOrderPrint(Node n, int maxTab, int trueHeight)
 {
-	if (n == NULL)
-		return;
+    if (n == NULL)
+        return;
 
-	InOrderPrint(n->left, maxTab, trueHeight + 1);
+    InOrderPrint(n->left, maxTab, trueHeight + 1);
 
-	for (int i = 0; i < maxTab - trueHeight; i++)
-		printf("\t");
+    for (int i = 0; i < maxTab - trueHeight; i++)
+        printf("\t");
 
-	printf("%d\n", n->key);
+    printf("%d\n", n->key);
+    // printf("(%d, %d, %d)\n", *counter, trueHeight, n->height);
+    // *counter += 1;
 
-	InOrderPrint(n->right, maxTab, trueHeight + 1);
+    InOrderPrint(n->right, maxTab, trueHeight + 1);
+}
+
+static void InOrderNewPrint(Node n, int maxTab, int trueHeight, char ***InOrderString, int *counter)
+{
+    if (n == NULL)
+        return;
+
+    InOrderNewPrint(n->left, maxTab, trueHeight + 1, InOrderString, counter);
+
+    String key = malloc(sizeof(char) * 10);
+    sprintf(key, "%d", n->key);
+
+    char *str = InOrderString[trueHeight][*counter];
+
+    strncpy(str, key, strlen(key));
+
+    *counter += 1;
+    free(key);
+    InOrderNewPrint(n->right, maxTab, trueHeight + 1, InOrderString, counter);
 }
 
 static void InOrderDetailedPrint(Node n, int parent)
 {
-	if (n == NULL)
-		return;
+    if (n == NULL)
+        return;
 
-	InOrderDetailedPrint(n->left, n->key);
+    InOrderDetailedPrint(n->left, n->key);
 
-	printf("{\n\tElement: %d\n\tLevel: %d\n\tParent: %d\n}\n", n->key, n->height, parent);
+    printf("{\n\tElement: %d\n\tLevel: %d\n\tParent: %d\n}\n", n->key, n->height, parent);
 
-	InOrderDetailedPrint(n->right, n->key);
+    InOrderDetailedPrint(n->right, n->key);
 }
 
 int main(void)
 {
-	Tree t = TreeNew();
+    Tree t = TreeNew();
+    String buf = malloc(sizeof(char) * MAX + 1);
+    memset(buf, '\0', MAX + 1);
 
-	while (1)
-	{
-		char command = '\0';
-		char buf = '\0';
-		printf("> ");
-		scanf(" %c%c", &command, &buf);
+    while (getCommand(buf))
+    {
+        int ntokens = 0;
+        char **tokens = tokenize(buf, &ntokens);
+        if (ntokens == 0)
+        {
+            free(tokens);
+            continue;
+        }
 
-		switch (command)
-		{
-		case '+':
-			runInsert(t);
-			break;
-		case '-':
-			runDelete(t);
-			break;
-		case 'p':
-			runPrint(t, buf);
-			break;
-		case 'q':
-			runQuit(t);
-		case 's':
-			runSearch(t);
-			break;
-		case 'c':
-			runClear();
-			break;
-		case '?':
-			runHelp();
-			break;
-		case 'w':
-			runSave(t);
-			break;
-		case 'l':
-			t = runLoad(t);
-			break;
-		case 'b':
-			runCheckBalanced(t);
-			break;
-		default:
-			printf("Invalid Input: %c. Buffer: %c.\n", command, buf);
-		}
-	}
+        if (strcmp(tokens[0], "q") == 0)
+            break;
+        else if (strcmp(tokens[0], "?") == 0)
+            runHelp();
+        else
+        {
+            bool found = false;
+            for (int i = 0; i < NUM_COMMANDS; i++)
+            {
+                if (strcmp(tokens[0], Commands[i].name) == 0)
+                {
+                    Commands[i].func(t, ntokens, tokens);
+                    found = true;
+                    break;
+                }
+            }
+            if (!found)
+                printf("Unknown command: %s\n", tokens[0]);
+        }
 
-	runQuit(t);
+        freeTokens(tokens);
+    }
+
+    free(buf);
+    runQuit(t, 0, NULL);
 }
 
-static void runInsert(Tree t)
+static bool getCommand(String buf)
 {
-	char buffer = '\0';
-	int digit = 0;
+    printf("> ");
+    if (fgets(buf, MAX, stdin) != NULL)
+    {
+        int len = strlen(buf);
+        if (len > 0 && buf[len - 1] != '\n')
+        {
+            buf[len] = '\n';
+            buf[len + 1] = '\0';
+        }
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
 
-	printf("Run Insert\n");
+static char **tokenize(String s, int *ntokens)
+{
+    String separators = " \t\r\n";
+    *ntokens = 0;
 
-	do
-	{
-		scanf(" %d%c", &digit, &buffer);
-		if (!TreeInsert(t, digit))
-			return;
-	} while (buffer != '\n');
+    char **tokens = calloc((strlen(s) + 1), sizeof(*tokens));
+    assert(tokens != NULL);
+
+    while (*s != '\0')
+    {
+        s += strspn(s, separators);
+
+        if (*s == '\0')
+        {
+            break;
+        }
+
+        size_t length = strcspn(s, separators);
+
+        String token = strndup(s, length);
+        assert(token != NULL);
+        s += length;
+
+        tokens[*ntokens] = token;
+        (*ntokens)++;
+    }
+
+    tokens[*ntokens] = NULL;
+
+    tokens = realloc(tokens, (*ntokens + 1) * sizeof(*tokens));
+    assert(tokens != NULL);
+
+    return tokens;
+}
+
+static void freeTokens(char **tokens)
+{
+    for (int i = 0; tokens[i] != NULL; i++)
+    {
+        free(tokens[i]);
+    }
+    free(tokens);
+}
+
+static void runInsert(Tree t, int argc, char **argv)
+{
+    for (int i = 1; i < argc; i++)
+    {
+        if (!TreeInsert(t, atoi(argv[i])))
+            return;
+    }
 }
 
 static void runHelp()
 {
-	printf("+: Add elements to tree\n-: Delete Element from Tree\np: Print Tree, -l for level order, -L for detailed level order, -v for detailed in order\ns: Search for element\nc: Clear stdout\nw: Save Current BST to File\nl: Load BST from file if it exists\nb: Check if tree is balanced\n?: Help\n");
+    for (int i = 0; i < NUM_COMMANDS; i++)
+        printf("%s:\t%s%s\n", Commands[i].name, Commands[i].modifiers, Commands[i].help);
 }
 
-static void runDelete(Tree t)
+static void runDelete(Tree t, int argc, char **argv)
 {
-	char buffer = '\0';
-	int digit = 0;
-
-	printf("Run Insert\n");
-
-	do
-	{
-		scanf(" %d%c", &digit, &buffer);
-		if (!TreeDelete(t, digit))
-			return;
-	} while (buffer != '\n');
+    for (int i = 1; i < argc; i++)
+    {
+        if (!TreeDelete(t, atoi(argv[i])))
+            return;
+    }
 }
 
-static void runPrint(Tree t, char buf)
+static void runPrint(Tree t, int argc, char **argv)
 {
-	// TODO: Adjust Height tabbing. Use max to renormalise tab indents
-	// * Use Recursive to get max height
-	// * Print using new max height
+    printf("Running Print:\n");
+    if (argc > 1 && argv[1][0] == '-')
+    {
+        switch (argv[1][1])
+        {
+        case 'l':
+            PrintLevelOrder(t->root, false, stdout);
+            break;
+        case 'L':
+            PrintLevelOrder(t->root, true, stdout);
+            break;
+        case 'i':
+            InOrderDetailedPrint(t->root, -1);
+            break;
+        case 'I':
+            InOrderPrint(t->root, (t->root == NULL) ? 0 : t->root->height, 0);
+            break;
+        default:
+            printf("Unknown option: %s\n", argv[1]);
+        }
 
-	if (buf != '\n')
-	{
-		char option = '0';
-		char d = '0';
+        return;
+    }
 
-		scanf(" %c%c", &d, &option);
+    Size size;
+    size.height = (t->root == NULL) ? 0 : t->root->height + 1;
+    size.width = 2 * (size.height * size.height) - 1;
 
-		switch (option)
-		{
-		case 'l':
-			BSTreeLevelOrder(t->root, false, stdout);
-			break;
-		case 'L':
-			BSTreeLevelOrder(t->root, true, stdout);
-			break;
-		case 'v':
-			InOrderDetailedPrint(t->root, -1);
-			break;
-		default:
-			printf("Incorrect Usage\n");
-		}
+    int counter = 0;
+    int maxHeight = (t->root == NULL) ? 0 : t->root->height;
 
-		return;
-	}
+    char ***InOrderString = malloc(sizeof(char **) * size.height);
+    for (int i = 0; i < size.height; i++)
+    {
+        InOrderString[i] = malloc(sizeof(char *) * size.width);
+        for (int j = 0; j < size.width; j++)
+        {
+            InOrderString[i][j] = malloc(sizeof(char) * 10);
+            strcpy(InOrderString[i][j], "   ");
+        }
+    }
 
-	printf("Running Print:\n");
-	int maxHeight = (t->root == NULL) ? 0 : t->root->height;
-	InOrderPrint(t->root, maxHeight, 0);
+    InOrderNewPrint(t->root, maxHeight, 0, InOrderString, &counter);
+
+    for (int i = 0; i < size.height; i++)
+    {
+        for (int j = 0; j < size.width; j++)
+        {
+            printf("%s", InOrderString[i][j]);
+            free(InOrderString[i][j]);
+        }
+        printf("\n");
+        free(InOrderString[i]);
+    }
+    free(InOrderString);
 }
 
-static void runSearch(Tree t)
+static void runSearch(Tree t, int argc, char **argv)
 {
-	int digit = 0;
-	char buf = '\0';
-
-	scanf(" %d%c", &digit, &buf);
-	bool search = TreeSearch(t, digit);
-
-	printf("Element %d was %s.\n", digit, (search) ? "found" : "not found");
+    for (int i = 1; i < argc; i++)
+    {
+        int num = atoi(argv[i]);
+        bool search = TreeSearch(t, num);
+        printf("Element %d was %s.\n", num, (search) ? "found" : "not found");
+    }
 }
 
-static void runClear()
+static void runClear(Tree t, int argc, char **argv)
 {
-	system("clear");
+    system("clear");
 }
 
-static void runSave(Tree t)
+static void runSave(Tree t, int argc, char **argv)
 {
-	FILE *fp = fopen("data.bst", "w");
-	BSTreeLevelOrder(t->root, false, fp);
-	fclose(fp);
+    FILE *fp = fopen("data.bst", "w");
+    PrintLevelOrder(t->root, false, fp);
+    fclose(fp);
 }
 
-static Tree runLoad(Tree t)
+static void runLoad(Tree t, int argc, char **argv)
 {
-	if (!FileExists("data.bst"))
-	{
-		printf("No Save File Exists\n");
-		return t;
-	}
+    if (!FileExists("data.bst"))
+    {
+        printf("No Save File Exists\n");
+    }
 
-	TreeFree(t);
-	t = NULL;
-	t = TreeNew();
+    while (t->root != NULL)
+        TreeDelete(t, t->root->key);
 
-	FILE *fp = fopen("data.bst", "r");
+    FILE *fp = fopen("data.bst", "r");
 
-	int elem = 0;
-	while (fscanf(fp, " %d", &elem) != -1)
-		TreeInsert(t, elem);
+    int elem = 0;
+    while (fscanf(fp, " %d", &elem) != -1)
+        TreeInsert(t, elem);
 
-	fclose(fp);
-	return t;
+    fclose(fp);
 }
 
-static void runCheckBalanced(Tree t)
+static void runCheckBalanced(Tree t, int argc, char **argv)
 {
-	bool balanced = TreeCheckBalanced(t->root);
-	printf("Tree is %sbalanced.\n", (balanced) ? "" : "not ");
+    if (argc > 1 && strcmp(argv[1], "-h") == 0)
+        printf("Height: %d\n", t->root->height);
+
+    bool balanced = TreeCheckBalanced(t->root);
+    printf("Tree is %sbalanced.\n", (balanced) ? "" : "not ");
 }
 
 static int TreeCheckBalanced(Node n)
 {
-	if (n == NULL)
-		return -1;
+    if (n == NULL)
+        return -1;
 
-	int left = TreeCheckBalanced(n->left);
-	int right = TreeCheckBalanced(n->right);
+    int left = TreeCheckBalanced(n->left);
+    int right = TreeCheckBalanced(n->right);
 
-	if (abs(left - right) > 1)
-		return 9999999;
+    if (abs(left - right) > 1)
+        return 9999999;
 
-	return 1 + max(left, right);
+    return 1 + max(left, right);
 }
 
-static void runQuit(Tree t)
+static void runQuit(Tree t, int argc, char **argv)
 {
-	TreeFree(t);
-	exit(EXIT_SUCCESS);
+    TreeFree(t);
+    exit(EXIT_SUCCESS);
 }
 
-static bool FileExists(char *filename)
+static bool FileExists(String filename)
 {
-	struct stat buffer;
-	return (stat(filename, &buffer) == 0);
+    struct stat buffer;
+    return (stat(filename, &buffer) == 0);
 }
 
 static int max(int a, int b)
 {
-	return (a > b) ? a : b;
+    return (a > b) ? a : b;
+}
+
+static int height(struct node *node)
+{
+    if (node == NULL)
+        return 0;
+    else
+    {
+        /* compute the height of each subtree */
+        int lheight = height(node->left);
+        int rheight = height(node->right);
+
+        /* use the larger one */
+        if (lheight > rheight)
+            return (lheight + 1);
+        else
+            return (rheight + 1);
+    }
 }
