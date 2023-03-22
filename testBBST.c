@@ -5,15 +5,23 @@
 #include <sys/stat.h>
 #include <string.h>
 #include <stdbool.h>
+#include <time.h>
 
 #include "bBST.h"
+
+typedef struct balance
+{
+	int height;
+	bool balanced;
+	Node unbalancedNode;
+} Balance;
 
 typedef char *String;
 static bool getCommand(String buf);
 static String *tokenize(String s, int *ntokens);
 static void freeTokens(char **tokens);
 
-void printCurrentLevel(Node root, int level, bool full, FILE *fp);
+static void printCurrentLevel(Node root, int level, bool full, FILE *fp);
 
 static void runInsert(Tree t, int argc, char **argv);
 static void runDelete(Tree t, int argc, char **argv);
@@ -27,408 +35,802 @@ static void runHelp();
 static void runSave(Tree t, int argc, char **argv);
 static void runLoad(Tree t, int argc, char **argv);
 static void runCheckBalanced(Tree t, int argc, char **argv);
-static int TreeCheckBalanced(Node n);
+static Balance TreeCheckBalanced(Node n);
 static bool FileExists(String filename);
 static int max(int a, int b);
 static int height(struct node *node);
+static void runKthSmallest(Tree t, int argc, char **argv);
+static void runLCA(Tree t, int argc, char **argv);
+static void runToList(Tree t, int argc, char **argv);
+static void runFloor(Tree t, int argc, char **argv);
+static void runCeiling(Tree t, int argc, char **argv);
+static void runTests(Tree t, int argc, char **argv);
+static void runInsertTests(Tree t);
+static void runDeleteTests(Tree t);
+static void runBalanceTests(Tree t);
+static void runKthSmallestTests(Tree t);
+static void runKthLargestTests(Tree t);
+static int orderIncreasing(const void *a, const void *b);
+static int orderDecreasing(const void *a, const void *b);
+static int numNodes(Tree t);
+static int NodeCount(Node n);
+static void runClearTree(Tree t, int argc, char **argv);
+
+static int GetHeight(Node n);
 
 #define CHAR_ROW_MAX 100
 #define CHAR_COL_MAX 100
 #define MAX 8192
-#define NUM_COMMANDS 9
 
 typedef struct command
 {
-    String name;
-    void (*func)(Tree, int, char **);
-    String modifiers;
-    String help;
+	String name;
+	void (*func)(Tree, int, char **);
+	String modifiers;
+	String help;
 } Command;
 
 typedef struct size
 {
-    int width;
-    int height;
+	int width;
+	int height;
 } Size;
 
 // Scan through file, each command has one letter associated to it, add that letter and its corresponding function and a fitting help message to the Commands array
-static Command Commands[NUM_COMMANDS] = {
-    {"+", runInsert, "", "Insert a new node into the tree"},
-    {"-", runDelete, "", "Delete a node from the tree"},
-    {"p", runPrint, "-[l, L, i] ",
-     "Print the tree"},
-    {"q", runQuit, "", "Quit the program"},
-    {"s", runSearch, "", "Search for a node in the tree"},
-    {"c", runClear, "", "Clear the tree"},
-    {"w", runSave, "", "Save the tree to a file"},
-    {"l", runLoad, "", "Load a tree from a file"},
-    {"b", runCheckBalanced, "-h ", "Check if the tree is balanced"}};
+static Command Commands[] = {
+	{"+", runInsert, "", "Insert a new node into the tree"},
+	{"-", runDelete, "", "Delete a node from the tree"},
+	{"p", runPrint, "-[l, L, i] ",
+	 "Print the tree"},
+	{"q", runQuit, "", "Quit the program"},
+	{"s", runSearch, "", "Search for a node in the tree"},
+	{"c", runClear, "", "Clear the tree"},
+	{"w", runSave, "", "Save the tree to a file"},
+	{"l", runLoad, "", "Load a tree from a file"},
+	{"b", runCheckBalanced, "-h ", "Check if the tree is balanced"},
+	{"k", runKthSmallest, "", "Find the kth Smallest Element in the Tree"},
+	{"a", runLCA, "", "Find the Lowest Common Ancestor of two nodes in the tree"},
+	{"f", runFloor, "", "Find the floor of a node in the tree"},
+	{"t", runToList, "", "Convert the tree to a list"},
+	{"C", runCeiling, "", "Find the ceiling of a node in the tree"},
+	{"test", runTests, "-[b, i, d, k, K] ", "Run tests on Balance, floor, ceiling"},
+	{"delete", runClearTree, "", "Clears Tree"},
+	{NULL, NULL, NULL, NULL}};
 
 /**
  * Prints the BST in Level Order
  * From: https://www.geeksforgeeks.org/level-order-tree-traversal/
  */
 
-void PrintLevelOrder(Node root, bool full, FILE *fp)
+static void PrintLevelOrder(Node root, bool full, FILE *fp)
 {
-    int h = height(root);
-    int i;
-    for (i = 1; i <= h; i++)
-        printCurrentLevel(root, i, full, fp);
-    fprintf(fp, "\n");
+	int h = height(root);
+	int i;
+	for (i = 1; i <= h; i++)
+		printCurrentLevel(root, i, full, fp);
+	fprintf(fp, "\n");
 }
 
 /* Print nodes at a current level */
-void printCurrentLevel(Node root, int level, bool full, FILE *fp)
+static void printCurrentLevel(Node root, int level, bool full, FILE *fp)
 {
-    if (root == NULL)
-        return;
-    if (level == 1)
-    {
-        if (!full)
-            fprintf(fp, "%d ", root->key);
-        else
-            fprintf(fp, "{\n\tElement: %d\n\tLevel: %d\n}\n", root->key, root->height);
-    }
-    else if (level > 1)
-    {
-        printCurrentLevel(root->left, level - 1, full, fp);
-        printCurrentLevel(root->right, level - 1, full, fp);
-    }
+	if (root == NULL)
+		return;
+	if (level == 1)
+	{
+		if (!full)
+			fprintf(fp, "%d ", root->key);
+		else
+			fprintf(fp, "{\n\tElement: %d\n\tLevel: %d\n}\n", root->key, root->height);
+	}
+	else if (level > 1)
+	{
+		printCurrentLevel(root->left, level - 1, full, fp);
+		printCurrentLevel(root->right, level - 1, full, fp);
+	}
 }
 
 static void InOrderPrint(Node n, int maxTab, int trueHeight)
 {
-    if (n == NULL)
-        return;
+	if (n == NULL)
+		return;
 
-    InOrderPrint(n->left, maxTab, trueHeight + 1);
+	InOrderPrint(n->left, maxTab, trueHeight + 1);
 
-    for (int i = 0; i < maxTab - trueHeight; i++)
-        printf("\t");
+	for (int i = 0; i < maxTab - trueHeight; i++)
+		printf("\t");
 
-    printf("%d\n", n->key);
-    // printf("(%d, %d, %d)\n", *counter, trueHeight, n->height);
-    // *counter += 1;
+	printf("%d\n", n->key);
+	// printf("(%d, %d, %d)\n", *counter, trueHeight, n->height);
+	// *counter += 1;
 
-    InOrderPrint(n->right, maxTab, trueHeight + 1);
+	InOrderPrint(n->right, maxTab, trueHeight + 1);
 }
 
 static void InOrderNewPrint(Node n, int maxTab, int trueHeight, char ***InOrderString, int *counter)
 {
-    if (n == NULL)
-        return;
+	if (n == NULL)
+		return;
 
-    InOrderNewPrint(n->left, maxTab, trueHeight + 1, InOrderString, counter);
+	InOrderNewPrint(n->left, maxTab, trueHeight + 1, InOrderString, counter);
 
-    String key = malloc(sizeof(char) * 10);
-    sprintf(key, "%d", n->key);
+	String key = malloc(sizeof(char) * 10);
+	sprintf(key, "%d", n->key);
 
-    char *str = InOrderString[trueHeight][*counter];
+	char *str = InOrderString[trueHeight][*counter];
+	printf("{TH: %d, C: %d}\n", trueHeight, *counter);
 
-    strncpy(str, key, strlen(key));
+	strncpy(str, key, 10);
+	str[9] = '\0';
 
-    *counter += 1;
-    free(key);
-    InOrderNewPrint(n->right, maxTab, trueHeight + 1, InOrderString, counter);
+	*counter += 1;
+	free(key);
+	InOrderNewPrint(n->right, maxTab, trueHeight + 1, InOrderString, counter);
 }
 
 static void InOrderDetailedPrint(Node n, int parent)
 {
-    if (n == NULL)
-        return;
+	if (n == NULL)
+		return;
 
-    InOrderDetailedPrint(n->left, n->key);
+	InOrderDetailedPrint(n->left, n->key);
 
-    printf("{\n\tElement: %d\n\tLevel: %d\n\tParent: %d\n}\n", n->key, n->height, parent);
+	printf("{\n\tElement: %d\n\tLevel: %d\n\tParent: %d\n}\n", n->key, n->height, parent);
 
-    InOrderDetailedPrint(n->right, n->key);
+	InOrderDetailedPrint(n->right, n->key);
 }
 
 int main(void)
 {
-    Tree t = TreeNew();
-    String buf = malloc(sizeof(char) * MAX + 1);
-    memset(buf, '\0', MAX + 1);
+	Tree t = TreeNew();
+	String buf = malloc(sizeof(char) * MAX + 1);
+	memset(buf, '\0', MAX + 1);
 
-    while (getCommand(buf))
-    {
-        int ntokens = 0;
-        char **tokens = tokenize(buf, &ntokens);
-        if (ntokens == 0)
-        {
-            free(tokens);
-            continue;
-        }
+	while (getCommand(buf))
+	{
+		int ntokens = 0;
+		char **tokens = tokenize(buf, &ntokens);
+		if (ntokens == 0)
+		{
+			free(tokens);
+			continue;
+		}
 
-        if (strcmp(tokens[0], "q") == 0)
-            break;
-        else if (strcmp(tokens[0], "?") == 0)
-            runHelp();
-        else
-        {
-            bool found = false;
-            for (int i = 0; i < NUM_COMMANDS; i++)
-            {
-                if (strcmp(tokens[0], Commands[i].name) == 0)
-                {
-                    Commands[i].func(t, ntokens, tokens);
-                    found = true;
-                    break;
-                }
-            }
-            if (!found)
-                printf("Unknown command: %s\n", tokens[0]);
-        }
+		if (strcmp(tokens[0], "q") == 0)
+			break;
+		else if (strcmp(tokens[0], "?") == 0)
+			runHelp();
+		else
+		{
+			bool found = false;
+			for (int i = 0; Commands[i].name != NULL; i++)
+			{
+				if (strcmp(tokens[0], Commands[i].name) == 0)
+				{
+					Commands[i].func(t, ntokens, tokens);
+					found = true;
+					break;
+				}
+			}
+			if (!found)
+				printf("Unknown command: %s\n", tokens[0]);
+		}
 
-        freeTokens(tokens);
-    }
+		freeTokens(tokens);
+	}
 
-    free(buf);
-    runQuit(t, 0, NULL);
+	free(buf);
+	runQuit(t, 0, NULL);
 }
 
 static bool getCommand(String buf)
 {
-    printf("> ");
-    if (fgets(buf, MAX, stdin) != NULL)
-    {
-        int len = strlen(buf);
-        if (len > 0 && buf[len - 1] != '\n')
-        {
-            buf[len] = '\n';
-            buf[len + 1] = '\0';
-        }
-        return true;
-    }
-    else
-    {
-        return false;
-    }
+	printf("> ");
+	if (fgets(buf, MAX, stdin) != NULL)
+	{
+		int len = strlen(buf);
+		if (len > 0 && buf[len - 1] != '\n')
+		{
+			buf[len] = '\n';
+			buf[len + 1] = '\0';
+		}
+		return true;
+	}
+	else
+	{
+		return false;
+	}
 }
 
 static char **tokenize(String s, int *ntokens)
 {
-    String separators = " \t\r\n";
-    *ntokens = 0;
+	String separators = " \t\r\n";
+	*ntokens = 0;
 
-    char **tokens = calloc((strlen(s) + 1), sizeof(*tokens));
-    assert(tokens != NULL);
+	char **tokens = calloc((strlen(s) + 1), sizeof(*tokens));
+	assert(tokens != NULL);
 
-    while (*s != '\0')
-    {
-        s += strspn(s, separators);
+	while (*s != '\0')
+	{
+		s += strspn(s, separators);
 
-        if (*s == '\0')
-        {
-            break;
-        }
+		if (*s == '\0')
+		{
+			break;
+		}
 
-        size_t length = strcspn(s, separators);
+		size_t length = strcspn(s, separators);
 
-        String token = strndup(s, length);
-        assert(token != NULL);
-        s += length;
+		String token = strndup(s, length);
+		assert(token != NULL);
+		s += length;
 
-        tokens[*ntokens] = token;
-        (*ntokens)++;
-    }
+		tokens[*ntokens] = token;
+		(*ntokens)++;
+	}
 
-    tokens[*ntokens] = NULL;
+	tokens[*ntokens] = NULL;
 
-    tokens = realloc(tokens, (*ntokens + 1) * sizeof(*tokens));
-    assert(tokens != NULL);
+	tokens = realloc(tokens, (*ntokens + 1) * sizeof(*tokens));
+	assert(tokens != NULL);
 
-    return tokens;
+	return tokens;
 }
 
 static void freeTokens(char **tokens)
 {
-    for (int i = 0; tokens[i] != NULL; i++)
-    {
-        free(tokens[i]);
-    }
-    free(tokens);
+	for (int i = 0; tokens[i] != NULL; i++)
+	{
+		free(tokens[i]);
+	}
+	free(tokens);
 }
 
 static void runInsert(Tree t, int argc, char **argv)
 {
-    for (int i = 1; i < argc; i++)
-    {
-        if (!TreeInsert(t, atoi(argv[i])))
-            return;
-    }
+	for (int i = 1; i < argc; i++)
+	{
+		if (!TreeInsert(t, atoi(argv[i])))
+			return;
+	}
 }
 
 static void runHelp()
 {
-    for (int i = 0; i < NUM_COMMANDS; i++)
-        printf("%s:\t%s%s\n", Commands[i].name, Commands[i].modifiers, Commands[i].help);
+	for (int i = 0; Commands[i].help != NULL; i++)
+		printf("%s:\t%s%s\n", Commands[i].name, Commands[i].modifiers, Commands[i].help);
 }
 
 static void runDelete(Tree t, int argc, char **argv)
 {
-    for (int i = 1; i < argc; i++)
-    {
-        if (!TreeDelete(t, atoi(argv[i])))
-            return;
-    }
+	for (int i = 1; i < argc; i++)
+	{
+		if (!TreeDelete(t, atoi(argv[i])))
+			return;
+	}
 }
 
 static void runPrint(Tree t, int argc, char **argv)
 {
-    printf("Running Print:\n");
-    if (argc > 1 && argv[1][0] == '-')
-    {
-        switch (argv[1][1])
-        {
-        case 'l':
-            PrintLevelOrder(t->root, false, stdout);
-            break;
-        case 'L':
-            PrintLevelOrder(t->root, true, stdout);
-            break;
-        case 'i':
-            InOrderDetailedPrint(t->root, -1);
-            break;
-        case 'I':
-            InOrderPrint(t->root, (t->root == NULL) ? 0 : t->root->height, 0);
-            break;
-        default:
-            printf("Unknown option: %s\n", argv[1]);
-        }
+	printf("Running Print:\n");
+	if (argc > 1 && argv[1][0] == '-')
+	{
+		switch (argv[1][1])
+		{
+		case 'l':
+			PrintLevelOrder(t->root, false, stdout);
+			break;
+		case 'L':
+			PrintLevelOrder(t->root, true, stdout);
+			break;
+		case 'i':
+			InOrderDetailedPrint(t->root, -1);
+			printf("Num Nodes: %d\n", numNodes(t));
+			break;
+		case 'I':
+			InOrderPrint(t->root, (t->root == NULL) ? 0 : t->root->height, 0);
+			break;
+		default:
+			printf("Unknown option: %s\n", argv[1]);
+		}
 
-        return;
-    }
+		return;
+	}
 
-    Size size;
-    size.height = (t->root == NULL) ? 0 : t->root->height + 1;
-    size.width = 2 * (size.height * size.height) - 1;
+	Size size;
+	size.height = (t->root == NULL) ? 0 : t->root->height + 1;
+	size.width = 2 * (size.height * size.height) - 1;
 
-    int counter = 0;
-    int maxHeight = (t->root == NULL) ? 0 : t->root->height;
+	printf("Height: %d, Width: %d\n\n", size.height, size.width);
 
-    char ***InOrderString = malloc(sizeof(char **) * size.height);
-    for (int i = 0; i < size.height; i++)
-    {
-        InOrderString[i] = malloc(sizeof(char *) * size.width);
-        for (int j = 0; j < size.width; j++)
-        {
-            InOrderString[i][j] = malloc(sizeof(char) * 10);
-            strcpy(InOrderString[i][j], "   ");
-        }
-    }
+	int counter = 0;
+	int maxHeight = (t->root == NULL) ? 0 : t->root->height;
 
-    InOrderNewPrint(t->root, maxHeight, 0, InOrderString, &counter);
+	char ***InOrderString = malloc(sizeof(char **) * size.height);
+	for (int i = 0; i < size.height; i++)
+	{
+		InOrderString[i] = malloc(sizeof(char *) * size.width);
+		for (int j = 0; j < size.width; j++)
+		{
+			InOrderString[i][j] = malloc(sizeof(char) * 10);
+			strcpy(InOrderString[i][j], "   ");
+		}
+	}
 
-    for (int i = 0; i < size.height; i++)
-    {
-        for (int j = 0; j < size.width; j++)
-        {
-            printf("%s", InOrderString[i][j]);
-            free(InOrderString[i][j]);
-        }
-        printf("\n");
-        free(InOrderString[i]);
-    }
-    free(InOrderString);
+	InOrderNewPrint(t->root, maxHeight, 0, InOrderString, &counter);
+
+	for (int i = 0; i < size.height; i++)
+	{
+		for (int j = 0; j < size.width; j++)
+		{
+			printf("%s", InOrderString[i][j]);
+			free(InOrderString[i][j]);
+		}
+		printf("\n");
+		free(InOrderString[i]);
+	}
+	free(InOrderString);
 }
 
 static void runSearch(Tree t, int argc, char **argv)
 {
-    for (int i = 1; i < argc; i++)
-    {
-        int num = atoi(argv[i]);
-        bool search = TreeSearch(t, num);
-        printf("Element %d was %s.\n", num, (search) ? "found" : "not found");
-    }
+	for (int i = 1; i < argc; i++)
+	{
+		int num = atoi(argv[i]);
+		bool search = TreeSearch(t, num);
+		printf("Element %d was %s.\n", num, (search) ? "found" : "not found");
+	}
 }
 
 static void runClear(Tree t, int argc, char **argv)
 {
-    system("clear");
+	system("clear");
 }
 
 static void runSave(Tree t, int argc, char **argv)
 {
-    FILE *fp = fopen("data.bst", "w");
-    PrintLevelOrder(t->root, false, fp);
-    fclose(fp);
+	FILE *fp = fopen("data.bst", "w");
+	PrintLevelOrder(t->root, false, fp);
+	fclose(fp);
 }
 
 static void runLoad(Tree t, int argc, char **argv)
 {
-    if (!FileExists("data.bst"))
-    {
-        printf("No Save File Exists\n");
-    }
+	if (!FileExists("data.bst"))
+	{
+		printf("No Save File Exists\n");
+		return;
+	}
 
-    while (t->root != NULL)
-        TreeDelete(t, t->root->key);
+	runClearTree(t, 0, NULL);
 
-    FILE *fp = fopen("data.bst", "r");
+	FILE *fp = fopen("data.bst", "r");
 
-    int elem = 0;
-    while (fscanf(fp, " %d", &elem) != -1)
-        TreeInsert(t, elem);
+	int elem = 0;
+	while (fscanf(fp, " %d", &elem) != -1)
+		TreeInsert(t, elem);
 
-    fclose(fp);
+	fclose(fp);
 }
 
 static void runCheckBalanced(Tree t, int argc, char **argv)
 {
-    if (argc > 1 && strcmp(argv[1], "-h") == 0)
-        printf("Height: %d\n", t->root->height);
+	if (argc > 1 && strcmp(argv[1], "-h") == 0)
+		printf("Height: %d\n", t->root->height);
 
-    bool balanced = TreeCheckBalanced(t->root);
-    printf("Tree is %sbalanced.\n", (balanced) ? "" : "not ");
+	Balance balance = TreeCheckBalanced(t->root);
+	printf("Tree is %sbalanced.\n", (balance.balanced) ? "" : "not ");
+	if (!balance.balanced)
+	{
+		printf("Unbalanced node: %d\n", balance.unbalancedNode->key);
+		printf("Left Height: %d\nRight Height: %d\n", GetHeight(balance.unbalancedNode->left), GetHeight(balance.unbalancedNode->right));
+	}
 }
 
-static int TreeCheckBalanced(Node n)
+static Balance TreeCheckBalanced(Node n)
 {
-    if (n == NULL)
-        return -1;
+	if (n == NULL)
+		return (Balance){-1, true};
 
-    int left = TreeCheckBalanced(n->left);
-    int right = TreeCheckBalanced(n->right);
+	Balance left = TreeCheckBalanced(n->left);
+	Balance right = TreeCheckBalanced(n->right);
 
-    if (abs(left - right) > 1)
-        return 9999999;
+	if (!left.balanced || !right.balanced)
+		return (!right.balanced) ? right : left;
 
-    return 1 + max(left, right);
+	if (abs(left.height - right.height) > 1)
+	{
+		Balance b = {1 + max(left.height, right.height), false};
+		b.unbalancedNode = n;
+		return b;
+	}
+
+	return (Balance){
+		max(left.height, right.height) + 1, true};
+}
+
+static void runKthSmallest(Tree t, int argc, char **argv)
+{
+	if (argc < 2)
+	{
+		printf("Usage: <k>\n");
+		return;
+	}
+
+	int k = atoi(argv[1]);
+	int kth = TreeKthSmallest(t, k);
+	printf("The %dth smallest element is ", k);
+	if (kth == UNDEFINED)
+		printf("Error!\n");
+	else
+		printf("%d.\n", kth);
+}
+
+static void runLCA(Tree t, int argc, char **argv)
+{
+	if (argc != 3)
+	{
+		printf("Usage: <a> <b>\n");
+		return;
+	}
+
+	int a = atoi(argv[1]);
+	int b = atoi(argv[2]);
+	int lca = TreeLCA(t, a, b);
+	printf("The LCA of %d and %d is ", a, b);
+	if (lca == UNDEFINED)
+		printf("Error!\n");
+	else
+		printf("%d.\n", lca);
+}
+
+static void runFloor(Tree t, int argc, char **argv)
+{
+	if (argc < 2)
+	{
+		printf("Usage: <x>\n");
+		return;
+	}
+
+	for (int i = 1; i < argc; i++)
+	{
+		int x = atoi(argv[i]);
+		int floor = TreeFloor(t, x);
+		printf("The floor of %d is ", x);
+		if (floor == UNDEFINED)
+			printf("Error!\n");
+		else
+			printf("%d.\n", floor);
+	}
+}
+
+static void runCeiling(Tree t, int argc, char **argv)
+{
+	if (argc < 2)
+	{
+		printf("Usage: <x>\n");
+		return;
+	}
+
+	for (int i = 1; i < argc; i++)
+	{
+		int x = atoi(argv[i]);
+		int ceiling = TreeCeiling(t, x);
+		printf("The ceiling of %d is ", x);
+		if (ceiling == UNDEFINED)
+			printf("Error!\n");
+		else
+			printf("%d.\n", ceiling);
+	}
+}
+
+static void runToList(Tree t, int argc, char **argv)
+{
+	List l = TreeToList(t);
+	ListShow(l);
+	printf("\n");
+	ListFree(l);
+}
+
+static void runTests(Tree t, int argc, char **argv)
+{
+	if (argc > 1)
+	{
+		switch (argv[1][1])
+		{
+		case 'b':
+			runBalanceTests(t);
+			break;
+		case 'i':
+			runInsertTests(t);
+			break;
+		case 'd':
+			runDeleteTests(t);
+		case 'k':
+			runKthSmallestTests(t);
+			break;
+		case 'K':
+			runKthLargestTests(t);
+			break;
+		default:
+			printf("Invalid test type.\n");
+			break;
+		}
+
+		return;
+	}
+
+	runInsertTests(t);
+	runDeleteTests(t);
+	runBalanceTests(t);
+	runKthLargestTests(t);
+	runKthSmallestTests(t);
+}
+
+static void runBalanceTests(Tree t)
+{
+	runClearTree(t, 0, NULL);
+	for (int X = 1; X <= 2500; X++)
+	{
+		srand(time(NULL));
+		int bstSize = rand() % 100 + 1;
+		int numbers[bstSize];
+		int *removed = calloc(bstSize, sizeof(int));
+
+		for (int i = 0; i < bstSize; i++)
+		{
+			int num = rand() % 5000 + 1;
+			TreeInsert(t, num);
+			numbers[i] = num;
+			Balance balance = TreeCheckBalanced(t->root);
+			if (!balance.balanced)
+			{
+				runSave(t, 0, NULL);
+				runPrint(t, 0, NULL);
+				printf("Unbalanced node: %d\n", balance.unbalancedNode->key);
+				printf("Left Height: %d\nRight Height: %d\n", GetHeight(balance.unbalancedNode->left), GetHeight(balance.unbalancedNode->right));
+				free(removed);
+				return;
+			}
+		}
+
+		for (int i = 0; i < bstSize; i++)
+		{
+			int index = rand() % bstSize;
+
+			while (removed[index] == 1)
+				index = rand() % bstSize;
+
+			removed[index] = 1;
+
+			TreeDelete(t, numbers[index]);
+			Balance balance = TreeCheckBalanced(t->root);
+			if (!balance.balanced)
+			{
+				runSave(t, 0, NULL);
+				runPrint(t, 0, NULL);
+				printf("Unbalanced node: %d\n", balance.unbalancedNode->key);
+				printf("Left Height: %d\nRight Height: %d\n", GetHeight(balance.unbalancedNode->left), GetHeight(balance.unbalancedNode->right));
+				free(removed);
+				return;
+			}
+		}
+
+		free(removed);
+		printf("Succesful Run %d!\n", X);
+	}
+}
+
+static void runInsertTests(Tree t)
+{
+	runClearTree(t, 0, NULL);
+	for (int X = 1; X <= 2500; X++)
+	{
+		srand(time(NULL));
+		int bstSize = rand() % 100 + 1;
+
+		for (int i = 0; i < bstSize; i++)
+		{
+			int num = rand() % 5000 + 1;
+			TreeInsert(t, num);
+			if (!TreeSearch(t, num))
+			{
+				runSave(t, 0, NULL);
+				runPrint(t, 0, NULL);
+				printf("Failed to insert %d.\n", num);
+				return;
+			}
+		}
+
+		printf("Succesful Run %d!\n", X);
+		runClearTree(t, 0, NULL);
+	}
+}
+
+static void runDeleteTests(Tree t)
+{
+	runClearTree(t, 0, NULL);
+	for (int X = 1; X <= 2500; X++)
+	{
+		srand(time(NULL));
+		int bstSize = rand() % 100 + 1;
+		int numbers[bstSize];
+		int *removed = calloc(bstSize, sizeof(int));
+
+		for (int i = 0; i < bstSize; i++)
+		{
+			int num = rand() % 5000 + 1;
+			TreeInsert(t, num);
+			numbers[i] = num;
+		}
+
+		for (int i = 0; i < bstSize; i++)
+		{
+			int index = rand() % bstSize;
+
+			while (removed[index] == 1)
+				index = rand() % bstSize;
+
+			removed[index] = 1;
+
+			TreeDelete(t, numbers[index]);
+			if (TreeSearch(t, numbers[index]))
+			{
+				runSave(t, 0, NULL);
+				runPrint(t, 0, NULL);
+				printf("Failed to delete %d.\n", numbers[index]);
+				free(removed);
+				return;
+			}
+		}
+
+		printf("Succesful Run %d!\n", X);
+	}
+}
+
+static void runKthSmallestTests(Tree t)
+{
+	runClearTree(t, 0, NULL);
+	for (int X = 1; X <= 2500; X++)
+	{
+		srand(time(NULL));
+		int bstSize = rand() % 250 + 1;
+		int numbers[bstSize];
+
+		for (int i = 0; i < bstSize; i++)
+		{
+			int num = rand() % 5000 + 1;
+			TreeInsert(t, num);
+			numbers[i] = num;
+		}
+
+		qsort(numbers, bstSize, sizeof(int), orderIncreasing);
+
+		for (int i = 0; i < bstSize; i++)
+		{
+			int num = TreeKthSmallest(t, i + 1);
+			if (num != numbers[i])
+			{
+				runSave(t, 0, NULL);
+				runPrint(t, 0, NULL);
+				printf("Failed to find %dth smallest number. Expected %d, got %d.\n", i + 1, numbers[i], num);
+				return;
+			}
+		}
+
+		runClearTree(t, 0, NULL);
+		printf("Succesful Run %d!\n", X);
+	}
+}
+
+static void runKthLargestTests(Tree t)
+{
+	runClearTree(t, 0, NULL);
+	for (int X = 1; X <= 2500; X++)
+	{
+		srand(time(NULL));
+		int bstSize = rand() % 250 + 1;
+		int numbers[bstSize];
+
+		for (int i = 0; i < bstSize; i++)
+		{
+			int num = rand() % 5000 + 1;
+			TreeInsert(t, num);
+			numbers[i] = num;
+		}
+
+		qsort(numbers, bstSize, sizeof(int), orderDecreasing);
+
+		for (int i = 0; i < bstSize; i++)
+		{
+			int num = TreeKthLargest(t, i + 1);
+			if (num != numbers[i])
+			{
+				runSave(t, 0, NULL);
+				runPrint(t, 0, NULL);
+				printf("Failed to find %dth largest number. Expected %d, got %d.\n", i + 1, numbers[i], num);
+				return;
+			}
+		}
+
+		runClearTree(t, 0, NULL);
+		printf("Succesful Run %d!\n", X);
+	}
+}
+
+static int orderIncreasing(const void *a, const void *b)
+{
+	return (*(int *)a - *(int *)b);
+}
+
+static int orderDecreasing(const void *a, const void *b)
+{
+	return (*(int *)b - *(int *)a);
+}
+
+static int numNodes(Tree t)
+{
+	if (t->root == NULL)
+		return 0;
+
+	return NodeCount(t->root);
+}
+
+static int NodeCount(Node t)
+{
+	if (t == NULL)
+		return 0;
+
+	return 1 + NodeCount(t->left) + NodeCount(t->right);
+}
+
+static void runClearTree(Tree t, int argc, char **argv)
+{
+	while (t->root != NULL)
+		TreeDelete(t, t->root->key);
 }
 
 static void runQuit(Tree t, int argc, char **argv)
 {
-    TreeFree(t);
-    exit(EXIT_SUCCESS);
+	TreeFree(t);
+	exit(EXIT_SUCCESS);
 }
+
+/* Helper Functions */
 
 static bool FileExists(String filename)
 {
-    struct stat buffer;
-    return (stat(filename, &buffer) == 0);
+	struct stat buffer;
+	return (stat(filename, &buffer) == 0);
 }
 
 static int max(int a, int b)
 {
-    return (a > b) ? a : b;
+	return (a > b) ? a : b;
 }
 
+/* For Level Order Print from GeeksforGeeks */
 static int height(struct node *node)
 {
-    if (node == NULL)
-        return 0;
-    else
-    {
-        /* compute the height of each subtree */
-        int lheight = height(node->left);
-        int rheight = height(node->right);
+	if (node == NULL)
+		return 0;
+	else
+	{
+		/* compute the height of each subtree */
+		int lheight = height(node->left);
+		int rheight = height(node->right);
 
-        /* use the larger one */
-        if (lheight > rheight)
-            return (lheight + 1);
-        else
-            return (rheight + 1);
-    }
+		/* use the larger one */
+		if (lheight > rheight)
+			return (lheight + 1);
+		else
+			return (rheight + 1);
+	}
+}
+
+static int GetHeight(Node n)
+{
+	if (n == NULL)
+		return -1;
+	return n->height;
 }

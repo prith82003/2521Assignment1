@@ -13,8 +13,8 @@
 ////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////////////
-// Auxiliary function prototypes
 
+// Auxiliary function prototypes
 static void FreeNode(Node n);
 static bool NodeSearch(Node n, int k);
 static Node NodeCreate(int k);
@@ -34,8 +34,9 @@ static Node GetSmallestNode(Node n);
 static bool CheckInsertCase(Node curr, int nKey);
 static bool CheckDeleteCase(Node curr, int leftCase);
 static void NodeToList(List l, Node curr);
-
-// Write Auxiliary function prototypes here, and declare them as static
+static Node NodeKthSmallest(Node curr, int k, int *count);
+static Node NodeLCA(Node curr, int a, int b);
+static Node NodeFloor(Node curr, int key);
 
 ////////////////////////////////////////////////////////////////////////
 
@@ -51,7 +52,7 @@ Tree TreeNew(void)
 
 	if (t == NULL)
 	{
-		fprintf(stderr, "Could not malloc Tree");
+		fprintf(stderr, "Could not malloc Tree\n");
 		exit(EXIT_FAILURE);
 	}
 
@@ -126,13 +127,13 @@ bool TreeInsert(Tree t, int key)
 {
 	if (TreeSearch(t, key))
 	{
-		fprintf(stderr, "Value %d already Exists in Tree", key);
+		fprintf(stderr, "Value %d already Exists in Tree\n", key);
 		return false;
 	}
 
 	if (key == UNDEFINED)
 	{
-		fprintf(stderr, "Can't Insert Undefined Value");
+		fprintf(stderr, "Can't Insert Undefined Value\n");
 		return false;
 	}
 
@@ -154,7 +155,7 @@ static Node NodeCreate(int k)
 
 	if (n == NULL)
 	{
-		fprintf(stderr, "Could not malloc Node");
+		fprintf(stderr, "Could not malloc Node\n");
 		exit(EXIT_FAILURE);
 	}
 
@@ -301,13 +302,13 @@ bool TreeDelete(Tree t, int key)
 {
 	if (key == UNDEFINED)
 	{
-		fprintf(stderr, "Can't accept UNDEFINED as input");
+		fprintf(stderr, "Can't accept UNDEFINED as input\n");
 		return false;
 	}
 
 	if (!TreeSearch(t, key))
 	{
-		fprintf(stderr, "Value to Delete not in Tree");
+		fprintf(stderr, "Value to Delete not in Tree\n");
 		return false;
 	}
 
@@ -325,7 +326,10 @@ static Node NodeDelete(Node curr, int key)
 	else if (key < curr->key)
 		curr->left = NodeDelete(curr->left, key);
 	else
-		return GetNextNode(curr);
+		curr = GetNextNode(curr);
+
+	if (curr == NULL)
+		return curr;
 
 	return BalanceTree(curr, NULL, CheckDeleteCase);
 }
@@ -357,7 +361,7 @@ static Node GetNextNode(Node n)
 static bool CheckDeleteCase(Node sub, int leftCase)
 {
 	int balanceSub = GetBalance(sub);
-	return (leftCase) ? balanceSub < 0 : balanceSub <= 0;
+	return (leftCase) ? balanceSub >= 0 : balanceSub > 0;
 }
 
 //! Replace with TreeKthSmallest Once Implemented
@@ -407,8 +411,31 @@ static void NodeToList(List l, Node curr)
  */
 int TreeKthSmallest(Tree t, int k)
 {
-	// TODO: Complete this function
-	return UNDEFINED;
+	if (t->root == NULL)
+		return UNDEFINED;
+
+	int count = 0;
+
+	Node result = NodeKthSmallest(t->root, k, &count);
+
+	return (result == NULL) ? UNDEFINED : result->key;
+}
+
+static Node NodeKthSmallest(Node curr, int k, int *count)
+{
+	if (curr == NULL)
+		return NULL;
+
+	Node left = NodeKthSmallest(curr->left, k, count);
+
+	if (left != NULL)
+		return left;
+
+	(*count)++;
+	if (*count == k)
+		return curr;
+
+	return NodeKthSmallest(curr->right, k, count);
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -436,8 +463,27 @@ int TreeKthLargest(Tree t, int k)
  */
 int TreeLCA(Tree t, int a, int b)
 {
-	// TODO: Complete this function
-	return UNDEFINED;
+	if (!TreeSearch(t, a) || !TreeSearch(t, b))
+		return UNDEFINED;
+
+	Node result = NodeLCA(t->root, a, b);
+	return (result == NULL) ? UNDEFINED : result->key;
+}
+
+static Node NodeLCA(Node curr, int a, int b)
+{
+	if (curr == NULL)
+		return NULL;
+
+	bool ALeft = a < curr->key;
+	bool BLeft = b < curr->key;
+
+	bool isA = curr->key == a;
+	bool isB = curr->key == b;
+
+	if (ALeft != BLeft || isA || isB)
+		return curr;
+	return (ALeft) ? NodeLCA(curr->left, a, b) : NodeLCA(curr->right, a, b);
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -449,8 +495,26 @@ int TreeLCA(Tree t, int a, int b)
  */
 int TreeFloor(Tree t, int key)
 {
-	// TODO: Complete this function
-	return UNDEFINED;
+	if (t->root == NULL)
+		return UNDEFINED;
+
+	Node result = NodeFloor(t->root, key);
+	return (result == NULL) ? UNDEFINED : result->key;
+}
+
+static Node NodeFloor(Node curr, int key)
+{
+	if (curr == NULL)
+		return NULL;
+
+	if (curr->key == key)
+		return curr;
+
+	if (curr->key > key)
+		return NodeFloor(curr->left, key);
+
+	Node right = NodeFloor(curr->right, key);
+	return (right == NULL) ? curr : right;
 }
 
 ////////////////////////////////////////////////////////////////////////

@@ -1,11 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <time.h>
 
 int main(int argc, char **argv)
 {
 	int numTimes = rand() % 150;
 	int maxInputNum = rand() % 1000;
+	srand(time(NULL));
 
 	if (argc > 1)
 	{
