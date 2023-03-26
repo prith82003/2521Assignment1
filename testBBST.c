@@ -18,14 +18,19 @@ typedef struct balance
 
 typedef char *String;
 static bool getCommand(String buf);
-static String *tokenize(String s, int *ntokens);
+static String *tokenize(String s, int *ntokens, String seperators);
 static void freeTokens(char **tokens);
 
 static void printCurrentLevel(Node root, int level, bool full, FILE *fp);
 
 static void runInsert(Tree t, int argc, char **argv);
+static void runInsertRange(Tree t, int argc, char **argv);
+static void runInsertRandom(Tree t, int argc, char **argv);
+static void runInsertNormal(Tree t, int argc, char **argv);
+
 static void runDelete(Tree t, int argc, char **argv);
 static void runPrint(Tree t, int argc, char **argv);
+static void executePrint(Tree t, FILE *fp);
 static void runQuit(Tree t, int argc, char **argv);
 static void runSearch(Tree t, int argc, char **argv);
 static void InOrderDetailedPrint(Node n, int parent);
@@ -45,22 +50,26 @@ static void runToList(Tree t, int argc, char **argv);
 static void runFloor(Tree t, int argc, char **argv);
 static void runCeiling(Tree t, int argc, char **argv);
 static void runTests(Tree t, int argc, char **argv);
-static void runInsertTests(Tree t);
-static void runDeleteTests(Tree t);
-static void runBalanceTests(Tree t);
-static void runKthSmallestTests(Tree t);
-static void runKthLargestTests(Tree t);
+static void runSearchBetween(Tree t, int argc, char **argv);
+static void runInsertTests(Tree t, bool output);
+static void runDeleteTests(Tree t, bool output);
+static void runBalanceTests(Tree t, bool output);
+static void runKthSmallestTests(Tree t, bool output);
+static void runKthLargestTests(Tree t, bool output);
 static int orderIncreasing(const void *a, const void *b);
 static int orderDecreasing(const void *a, const void *b);
 static int numNodes(Tree t);
 static int NodeCount(Node n);
 static void runClearTree(Tree t, int argc, char **argv);
+static void executeTests(Tree t, int numTimes, bool output);
+static void createDotFile(Node curr, FILE *fp);
 
 static int GetHeight(Node n);
 
 #define CHAR_ROW_MAX 100
 #define CHAR_COL_MAX 100
 #define MAX 8192
+#define PRINT_STRING_SIZE 5
 
 typedef struct command
 {
@@ -78,23 +87,24 @@ typedef struct size
 
 // Scan through file, each command has one letter associated to it, add that letter and its corresponding function and a fitting help message to the Commands array
 static Command Commands[] = {
-	{"+", runInsert, "", "Insert a new node into the tree"},
-	{"-", runDelete, "", "Delete a node from the tree"},
-	{"p", runPrint, "-[l, L, i] ",
+	{"+,add", runInsert, "-[r, R] ", "Insert a new node into the tree"},
+	{"-,d,remove", runDelete, "", "Delete a node from the tree"},
+	{"p,print", runPrint, "-[l, L, i] ",
 	 "Print the tree"},
-	{"q", runQuit, "", "Quit the program"},
-	{"s", runSearch, "", "Search for a node in the tree"},
-	{"c", runClear, "", "Clear the tree"},
-	{"w", runSave, "", "Save the tree to a file"},
-	{"l", runLoad, "", "Load a tree from a file"},
-	{"b", runCheckBalanced, "-h ", "Check if the tree is balanced"},
-	{"k", runKthSmallest, "", "Find the kth Smallest Element in the Tree"},
-	{"a", runLCA, "", "Find the Lowest Common Ancestor of two nodes in the tree"},
-	{"f", runFloor, "", "Find the floor of a node in the tree"},
-	{"t", runToList, "", "Convert the tree to a list"},
-	{"C", runCeiling, "", "Find the ceiling of a node in the tree"},
+	{"q,quit,exit", runQuit, "", "Quit the program"},
+	{"s,search", runSearch, "", "Search for a node in the tree"},
+	{"c,clear", runClear, "", "Clear the tree"},
+	{"w,save,write", runSave, "", "Save the tree to a file"},
+	{"l,load", runLoad, "", "Load a tree from a file"},
+	{"b,balance", runCheckBalanced, "-h ", "Check if the tree is balanced"},
+	{"k,kSmallest", runKthSmallest, "", "Find the kth Smallest Element in the Tree"},
+	{"a,LCA", runLCA, "", "Find the Lowest Common Ancestor of two nodes in the tree"},
+	{"f,floor", runFloor, "", "Find the floor of a node in the tree"},
+	{"t,list", runToList, "", "Convert the tree to a list"},
+	{"C,ceiling", runCeiling, "", "Find the ceiling of a node in the tree"},
 	{"test", runTests, "-[b, i, d, k, K] ", "Run tests on Balance, floor, ceiling"},
 	{"delete", runClearTree, "", "Clears Tree"},
+	{"sb", runSearchBetween, "", "Search Between Upper and Lower Value"},
 	{NULL, NULL, NULL, NULL}};
 
 /**
@@ -158,10 +168,15 @@ static void InOrderNewPrint(Node n, int maxTab, int trueHeight, char ***InOrderS
 	sprintf(key, "%d", n->key);
 
 	char *str = InOrderString[trueHeight][*counter];
-	printf("{TH: %d, C: %d}\n", trueHeight, *counter);
+	int totalPad = PRINT_STRING_SIZE - strlen(key);
 
-	strncpy(str, key, 10);
-	str[9] = '\0';
+	if (totalPad > 0)
+	{
+		char *startPos = &str[totalPad / 2];
+		snprintf(startPos, strlen(key) + 1, "%s", key);
+		for (int i = 0; i < totalPad / 2; i++)
+			strncat(startPos + strlen(key), " ", totalPad - (totalPad / 2));
+	}
 
 	*counter += 1;
 	free(key);
@@ -189,7 +204,7 @@ int main(void)
 	while (getCommand(buf))
 	{
 		int ntokens = 0;
-		char **tokens = tokenize(buf, &ntokens);
+		char **tokens = tokenize(buf, &ntokens, " \t\r\n");
 		if (ntokens == 0)
 		{
 			free(tokens);
@@ -205,12 +220,20 @@ int main(void)
 			bool found = false;
 			for (int i = 0; Commands[i].name != NULL; i++)
 			{
-				if (strcmp(tokens[0], Commands[i].name) == 0)
+				int nnames = 0;
+				String *names = tokenize(Commands[i].name, &nnames, ",");
+
+				for (int j = 0; j < nnames; j++)
 				{
-					Commands[i].func(t, ntokens, tokens);
-					found = true;
-					break;
+					if (strcmp(tokens[0], names[j]) == 0)
+					{
+						Commands[i].func(t, ntokens, tokens);
+						found = true;
+						break;
+					}
 				}
+
+				freeTokens(names);
 			}
 			if (!found)
 				printf("Unknown command: %s\n", tokens[0]);
@@ -242,9 +265,8 @@ static bool getCommand(String buf)
 	}
 }
 
-static char **tokenize(String s, int *ntokens)
+static char **tokenize(String s, int *ntokens, String separators)
 {
-	String separators = " \t\r\n";
 	*ntokens = 0;
 
 	char **tokens = calloc((strlen(s) + 1), sizeof(*tokens));
@@ -288,9 +310,70 @@ static void freeTokens(char **tokens)
 
 static void runInsert(Tree t, int argc, char **argv)
 {
+	if (argc > 1 && argv[1][0] == '-')
+	{
+		switch (argv[1][1])
+		{
+		case 'r':
+			runInsertRandom(t, argc, argv);
+			break;
+		case 'R':
+			runInsertRange(t, argc, argv);
+			break;
+		default:
+			printf("Unknown option: %s\n", argv[1]);
+			break;
+		}
+	}
+	else
+	{
+		runInsertNormal(t, argc, argv);
+	}
+}
+
+static void runInsertNormal(Tree t, int argc, char **argv)
+{
 	for (int i = 1; i < argc; i++)
 	{
 		if (!TreeInsert(t, atoi(argv[i])))
+			return;
+	}
+}
+
+static void runInsertRandom(Tree t, int argc, char **argv)
+{
+	int n = 10;
+	if (argc > 2)
+		n = atoi(argv[2]);
+
+	for (int i = 0; i < n; i++)
+	{
+		int r = rand() % 100;
+		if (!TreeInsert(t, r))
+			return;
+	}
+}
+
+static void runInsertRange(Tree t, int argc, char **argv)
+{
+	if (argc < 4)
+	{
+		printf("Usage: i -R <start> <end>\n");
+		return;
+	}
+
+	int start = atoi(argv[2]);
+	int end = atoi(argv[3]);
+
+	if (end <= start)
+	{
+		printf("End must be greater than start\n");
+		return;
+	}
+
+	for (int i = start; i <= end; i++)
+	{
+		if (!TreeInsert(t, i))
 			return;
 	}
 }
@@ -313,6 +396,7 @@ static void runDelete(Tree t, int argc, char **argv)
 static void runPrint(Tree t, int argc, char **argv)
 {
 	printf("Running Print:\n");
+	FILE *fp;
 	if (argc > 1 && argv[1][0] == '-')
 	{
 		switch (argv[1][1])
@@ -330,6 +414,21 @@ static void runPrint(Tree t, int argc, char **argv)
 		case 'I':
 			InOrderPrint(t->root, (t->root == NULL) ? 0 : t->root->height, 0);
 			break;
+		case 'f':
+			fp = fopen("tree.bst", "w");
+			if (fp == NULL)
+				printf("Error opening file\n");
+			else
+				executePrint(t, fp);
+			break;
+		case 'g':
+			fp = fopen("tree.dot", "w");
+			if (fp == NULL)
+				printf("Error opening file\n");
+			else
+				createDotFile(t->root, fp);
+			fclose(fp);
+			break;
 		default:
 			printf("Unknown option: %s\n", argv[1]);
 		}
@@ -337,11 +436,14 @@ static void runPrint(Tree t, int argc, char **argv)
 		return;
 	}
 
+	executePrint(t, stdout);
+}
+
+static void executePrint(Tree t, FILE *fp)
+{
 	Size size;
 	size.height = (t->root == NULL) ? 0 : t->root->height + 1;
 	size.width = 2 * (size.height * size.height) - 1;
-
-	printf("Height: %d, Width: %d\n\n", size.height, size.width);
 
 	int counter = 0;
 	int maxHeight = (t->root == NULL) ? 0 : t->root->height;
@@ -353,7 +455,7 @@ static void runPrint(Tree t, int argc, char **argv)
 		for (int j = 0; j < size.width; j++)
 		{
 			InOrderString[i][j] = malloc(sizeof(char) * 10);
-			strcpy(InOrderString[i][j], "   ");
+			strcpy(InOrderString[i][j], "     ");
 		}
 	}
 
@@ -363,13 +465,25 @@ static void runPrint(Tree t, int argc, char **argv)
 	{
 		for (int j = 0; j < size.width; j++)
 		{
-			printf("%s", InOrderString[i][j]);
+			fprintf(fp, "%s", InOrderString[i][j]);
 			free(InOrderString[i][j]);
 		}
-		printf("\n");
+		fprintf(fp, "\n");
 		free(InOrderString[i]);
 	}
 	free(InOrderString);
+}
+
+static void createDotFile(Node curr, FILE *fp)
+{
+	if (curr == NULL)
+		return;
+
+	createDotFile(curr->left, fp);
+	int leftData = (curr->left == NULL) ? -1 : curr->left->key;
+	int rightData = (curr->right == NULL) ? -1 : curr->right->key;
+	fprintf(fp, "%d -> {%d, %d};\n", curr->key, leftData, rightData);
+	createDotFile(curr->right, fp);
 }
 
 static void runSearch(Tree t, int argc, char **argv)
@@ -534,23 +648,31 @@ static void runToList(Tree t, int argc, char **argv)
 
 static void runTests(Tree t, int argc, char **argv)
 {
-	if (argc > 1)
+	int numTimes = 1;
+	if (argc > 1 && argv[1][0] == '-')
 	{
 		switch (argv[1][1])
 		{
 		case 'b':
-			runBalanceTests(t);
+			runBalanceTests(t, true);
 			break;
 		case 'i':
-			runInsertTests(t);
+			runInsertTests(t, true);
 			break;
 		case 'd':
-			runDeleteTests(t);
+			runDeleteTests(t, true);
+			break;
 		case 'k':
-			runKthSmallestTests(t);
+			runKthSmallestTests(t, true);
 			break;
 		case 'K':
-			runKthLargestTests(t);
+			runKthLargestTests(t, true);
+			break;
+		case 'q':
+			if (argc > 2)
+				numTimes = atoi(argv[2]);
+
+			executeTests(t, numTimes, false);
 			break;
 		default:
 			printf("Invalid test type.\n");
@@ -560,14 +682,25 @@ static void runTests(Tree t, int argc, char **argv)
 		return;
 	}
 
-	runInsertTests(t);
-	runDeleteTests(t);
-	runBalanceTests(t);
-	runKthLargestTests(t);
-	runKthSmallestTests(t);
+	if (argc > 1)
+		numTimes = atoi(argv[1]);
+
+	executeTests(t, numTimes, true);
 }
 
-static void runBalanceTests(Tree t)
+static void executeTests(Tree t, int numTimes, bool output)
+{
+	for (int i = 0; i < numTimes; i++)
+	{
+		runInsertTests(t, output);
+		runDeleteTests(t, output);
+		runBalanceTests(t, output);
+		runKthLargestTests(t, output);
+		runKthSmallestTests(t, output);
+	}
+}
+
+static void runBalanceTests(Tree t, bool output)
 {
 	runClearTree(t, 0, NULL);
 	for (int X = 1; X <= 2500; X++)
@@ -580,6 +713,10 @@ static void runBalanceTests(Tree t)
 		for (int i = 0; i < bstSize; i++)
 		{
 			int num = rand() % 5000 + 1;
+
+			while (TreeSearch(t, num))
+				num = rand() % 5000 + 1;
+
 			TreeInsert(t, num);
 			numbers[i] = num;
 			Balance balance = TreeCheckBalanced(t->root);
@@ -617,11 +754,12 @@ static void runBalanceTests(Tree t)
 		}
 
 		free(removed);
-		printf("Succesful Run %d!\n", X);
+		if (output)
+			printf("Succesful Balance Run %d!\n", X);
 	}
 }
 
-static void runInsertTests(Tree t)
+static void runInsertTests(Tree t, bool output)
 {
 	runClearTree(t, 0, NULL);
 	for (int X = 1; X <= 2500; X++)
@@ -632,6 +770,10 @@ static void runInsertTests(Tree t)
 		for (int i = 0; i < bstSize; i++)
 		{
 			int num = rand() % 5000 + 1;
+
+			while (TreeSearch(t, num))
+				num = rand() % 5000 + 1;
+
 			TreeInsert(t, num);
 			if (!TreeSearch(t, num))
 			{
@@ -642,12 +784,13 @@ static void runInsertTests(Tree t)
 			}
 		}
 
-		printf("Succesful Run %d!\n", X);
+		if (output)
+			printf("Succesful Insert Run %d!\n", X);
 		runClearTree(t, 0, NULL);
 	}
 }
 
-static void runDeleteTests(Tree t)
+static void runDeleteTests(Tree t, bool output)
 {
 	runClearTree(t, 0, NULL);
 	for (int X = 1; X <= 2500; X++)
@@ -660,6 +803,10 @@ static void runDeleteTests(Tree t)
 		for (int i = 0; i < bstSize; i++)
 		{
 			int num = rand() % 5000 + 1;
+
+			while (TreeSearch(t, num))
+				num = rand() % 5000 + 1;
+
 			TreeInsert(t, num);
 			numbers[i] = num;
 		}
@@ -684,11 +831,13 @@ static void runDeleteTests(Tree t)
 			}
 		}
 
-		printf("Succesful Run %d!\n", X);
+		free(removed);
+		if (output)
+			printf("Succesful Delete Run %d!\n", X);
 	}
 }
 
-static void runKthSmallestTests(Tree t)
+static void runKthSmallestTests(Tree t, bool output)
 {
 	runClearTree(t, 0, NULL);
 	for (int X = 1; X <= 2500; X++)
@@ -700,6 +849,10 @@ static void runKthSmallestTests(Tree t)
 		for (int i = 0; i < bstSize; i++)
 		{
 			int num = rand() % 5000 + 1;
+
+			while (TreeSearch(t, num))
+				num = rand() % 5000 + 1;
+
 			TreeInsert(t, num);
 			numbers[i] = num;
 		}
@@ -719,11 +872,13 @@ static void runKthSmallestTests(Tree t)
 		}
 
 		runClearTree(t, 0, NULL);
-		printf("Succesful Run %d!\n", X);
+
+		if (output)
+			printf("Succesful kTh Smallest Run %d!\n", X);
 	}
 }
 
-static void runKthLargestTests(Tree t)
+static void runKthLargestTests(Tree t, bool output)
 {
 	runClearTree(t, 0, NULL);
 	for (int X = 1; X <= 2500; X++)
@@ -735,6 +890,10 @@ static void runKthLargestTests(Tree t)
 		for (int i = 0; i < bstSize; i++)
 		{
 			int num = rand() % 5000 + 1;
+
+			while (TreeSearch(t, num))
+				num = rand() % 5000 + 1;
+
 			TreeInsert(t, num);
 			numbers[i] = num;
 		}
@@ -754,7 +913,9 @@ static void runKthLargestTests(Tree t)
 		}
 
 		runClearTree(t, 0, NULL);
-		printf("Succesful Run %d!\n", X);
+
+		if (output)
+			printf("Succesful kTh Largest Run %d!\n", X);
 	}
 }
 
@@ -788,6 +949,23 @@ static void runClearTree(Tree t, int argc, char **argv)
 {
 	while (t->root != NULL)
 		TreeDelete(t, t->root->key);
+}
+
+static void runSearchBetween(Tree t, int argc, char **argv)
+{
+	if (argc != 3)
+	{
+		printf("Usage: <min> <max>\n");
+		return;
+	}
+
+	int min = atoi(argv[1]);
+	int max = atoi(argv[2]);
+	List l = TreeSearchBetween(t, min, max);
+	printf("Search Between %d and %d: ", min, max);
+	ListShow(l);
+	ListFree(l);
+	printf("\n");
 }
 
 static void runQuit(Tree t, int argc, char **argv)

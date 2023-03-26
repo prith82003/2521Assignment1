@@ -30,13 +30,15 @@ static int max(int a, int b);
 static Node NodeDelete(Node n, int key);
 static Node BalanceTree(Node curr, Node n, bool (*CheckCase)(Node, int));
 static Node GetNextNode(Node n);
-static Node GetSmallestNode(Node n);
 static bool CheckInsertCase(Node curr, int nKey);
 static bool CheckDeleteCase(Node curr, int leftCase);
 static void NodeToList(List l, Node curr);
 static Node NodeKthSmallest(Node curr, int k, int *count);
+static Node NodeKthLargest(Node curr, int k, int *count);
 static Node NodeLCA(Node curr, int a, int b);
 static Node NodeFloor(Node curr, int key);
+static Node NodeCeiling(Node curr, int key);
+static void NodeSearchBetween(Node curr, int lower, int upper, List l);
 
 ////////////////////////////////////////////////////////////////////////
 
@@ -68,6 +70,9 @@ Tree TreeNew(void)
  */
 void TreeFree(Tree t)
 {
+	if (t == NULL)
+		return;
+
 	if (t->root != NULL)
 		FreeNode(t->root);
 
@@ -97,7 +102,12 @@ static void FreeNode(Node n)
  */
 bool TreeSearch(Tree t, int key)
 {
+	if (t == NULL)
+		return false;
 	if (t->root == NULL)
+		return false;
+
+	if (key == UNDEFINED)
 		return false;
 
 	return NodeSearch(t->root, key);
@@ -125,6 +135,9 @@ static bool NodeSearch(Node n, int k)
  */
 bool TreeInsert(Tree t, int key)
 {
+	if (t == NULL)
+		return false;
+
 	if (TreeSearch(t, key))
 	{
 		fprintf(stderr, "Value %d already Exists in Tree\n", key);
@@ -300,6 +313,12 @@ static void UpdateHeight(Node n)
  */
 bool TreeDelete(Tree t, int key)
 {
+	if (t == NULL)
+		return false;
+
+	if (t->root == NULL)
+		return false;
+
 	if (key == UNDEFINED)
 	{
 		fprintf(stderr, "Can't accept UNDEFINED as input\n");
@@ -351,7 +370,9 @@ static Node GetNextNode(Node n)
 	}
 
 	// Both Child Case
-	Node min = GetSmallestNode(n->right);
+	// Node min = GetSmallestNode(n->right);
+	int count = 0;
+	Node min = NodeKthSmallest(n->right, 1, &count);
 	n->key = min->key;
 
 	n->right = NodeDelete(n->right, min->key);
@@ -364,17 +385,6 @@ static bool CheckDeleteCase(Node sub, int leftCase)
 	return (leftCase) ? balanceSub >= 0 : balanceSub > 0;
 }
 
-//! Replace with TreeKthSmallest Once Implemented
-static Node GetSmallestNode(Node n)
-{
-	Node curr = n;
-
-	while (curr != NULL && curr->left != NULL)
-		curr = curr->left;
-
-	return curr;
-}
-
 ////////////////////////////////////////////////////////////////////////
 
 /**
@@ -385,6 +395,8 @@ static Node GetSmallestNode(Node n)
 List TreeToList(Tree t)
 {
 	List l = ListNew();
+	if (t == NULL)
+		return l;
 	NodeToList(l, t->root);
 	return l;
 }
@@ -411,11 +423,13 @@ static void NodeToList(List l, Node curr)
  */
 int TreeKthSmallest(Tree t, int k)
 {
+	if (t == NULL)
+		return UNDEFINED;
+
 	if (t->root == NULL)
 		return UNDEFINED;
 
 	int count = 0;
-
 	Node result = NodeKthSmallest(t->root, k, &count);
 
 	return (result == NULL) ? UNDEFINED : result->key;
@@ -448,8 +462,34 @@ static Node NodeKthSmallest(Node curr, int k, int *count)
  */
 int TreeKthLargest(Tree t, int k)
 {
-	// TODO: Complete this function
-	return UNDEFINED;
+	if (t == NULL)
+		return UNDEFINED;
+
+	if (t->root == NULL)
+		return UNDEFINED;
+
+	int count = 0;
+
+	Node result = NodeKthLargest(t->root, k, &count);
+
+	return (result == NULL) ? UNDEFINED : result->key;
+}
+
+static Node NodeKthLargest(Node curr, int k, int *count)
+{
+	if (curr == NULL)
+		return NULL;
+
+	Node right = NodeKthLargest(curr->right, k, count);
+
+	if (right != NULL)
+		return right;
+
+	(*count)++;
+	if (*count == k)
+		return curr;
+
+	return NodeKthLargest(curr->left, k, count);
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -463,6 +503,12 @@ int TreeKthLargest(Tree t, int k)
  */
 int TreeLCA(Tree t, int a, int b)
 {
+	if (t == NULL)
+		return UNDEFINED;
+
+	if (t->root == NULL)
+		return UNDEFINED;
+
 	if (!TreeSearch(t, a) || !TreeSearch(t, b))
 		return UNDEFINED;
 
@@ -483,7 +529,8 @@ static Node NodeLCA(Node curr, int a, int b)
 
 	if (ALeft != BLeft || isA || isB)
 		return curr;
-	return (ALeft) ? NodeLCA(curr->left, a, b) : NodeLCA(curr->right, a, b);
+	int checkVal = (a < b) ? ALeft : BLeft;
+	return (checkVal) ? NodeLCA(curr->left, a, b) : NodeLCA(curr->right, a, b);
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -495,6 +542,9 @@ static Node NodeLCA(Node curr, int a, int b)
  */
 int TreeFloor(Tree t, int key)
 {
+	if (t == NULL)
+		return UNDEFINED;
+
 	if (t->root == NULL)
 		return UNDEFINED;
 
@@ -526,8 +576,29 @@ static Node NodeFloor(Node curr, int key)
  */
 int TreeCeiling(Tree t, int key)
 {
-	// TODO: Complete this function
-	return UNDEFINED;
+	if (t == NULL)
+		return UNDEFINED;
+
+	if (t->root == NULL)
+		return UNDEFINED;
+
+	Node result = NodeCeiling(t->root, key);
+	return (result == NULL) ? UNDEFINED : result->key;
+}
+
+static Node NodeCeiling(Node curr, int key)
+{
+	if (curr == NULL)
+		return NULL;
+
+	if (curr->key == key)
+		return curr;
+
+	if (curr->key <= key)
+		return NodeCeiling(curr->right, key);
+
+	Node left = NodeCeiling(curr->left, key);
+	return (left == NULL) ? curr : left;
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -541,8 +612,52 @@ int TreeCeiling(Tree t, int key)
  */
 List TreeSearchBetween(Tree t, int lower, int upper)
 {
-	// TODO: Complete this function
-	return ListNew();
+	List l = ListNew();
+
+	if (t == NULL)
+		return l;
+
+	if (lower > upper)
+		return l;
+
+	if (lower == UNDEFINED || upper == UNDEFINED)
+		return l;
+
+	NodeSearchBetween(t->root, lower, upper, l);
+	return l;
+}
+
+static void NodeSearchBetween(Node curr, int lower, int upper, List l)
+{
+	if (curr == NULL)
+		return;
+
+	bool isAbove = curr->key >= lower;
+	bool isBelow = curr->key <= upper;
+	bool isBetween = isAbove && isBelow;
+
+	// printf("Current: %d\n IsAbove: %d\n IsBelow: %d\n IsBetween: %d\n", curr->key, isAbove, isBelow, isBetween);
+
+	if (isBetween)
+	{
+		NodeSearchBetween(curr->left, lower, upper, l);
+		ListAppend(l, curr->key);
+		NodeSearchBetween(curr->right, lower, upper, l);
+	}
+
+	if (!isBetween)
+	{
+		if (lower <= curr->key)
+			NodeSearchBetween(curr->left, lower, upper, l);
+		if (upper >= curr->key)
+			NodeSearchBetween(curr->right, lower, upper, l);
+	}
+
+	// if (!isBelow && curr->left->key <= upper)
+	// {
+	// 	printf("Current: %d\nLeft: %d\n", curr->key, curr->left->key);
+	// 	NodeSearchBetween(curr->left, lower, upper, l);
+	// }
 }
 
 ////////////////////////////////////////////////////////////////////////
