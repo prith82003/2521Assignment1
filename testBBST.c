@@ -426,8 +426,11 @@ static void runPrint(Tree t, int argc, char **argv)
 			fp = fopen("tree.dot", "w");
 			if (fp == NULL)
 				printf("Error opening file\n");
-			else
+			else {
+				fprintf(fp, "digraph BST {\n");
 				createDotFile(t->root, fp, &nullCounter);
+				fprintf(fp, "}");
+			}
 			fclose(fp);
 			break;
 		default:
