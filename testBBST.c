@@ -62,7 +62,7 @@ static int numNodes(Tree t);
 static int NodeCount(Node n);
 static void runClearTree(Tree t, int argc, char **argv);
 static void executeTests(Tree t, int numTimes, bool output);
-static void createDotFile(Node curr, FILE *fp);
+static void createDotFile(Node curr, FILE *fp, int *nullCounter);
 
 static int GetHeight(Node n);
 
@@ -397,6 +397,7 @@ static void runPrint(Tree t, int argc, char **argv)
 {
 	printf("Running Print:\n");
 	FILE *fp;
+	int nullCounter = 0;
 	if (argc > 1 && argv[1][0] == '-')
 	{
 		switch (argv[1][1])
@@ -426,7 +427,7 @@ static void runPrint(Tree t, int argc, char **argv)
 			if (fp == NULL)
 				printf("Error opening file\n");
 			else
-				createDotFile(t->root, fp);
+				createDotFile(t->root, fp, &nullCounter);
 			fclose(fp);
 			break;
 		default:
@@ -474,16 +475,32 @@ static void executePrint(Tree t, FILE *fp)
 	free(InOrderString);
 }
 
-static void createDotFile(Node curr, FILE *fp)
+static void createDotFile(Node curr, FILE *fp, int *nullCounter)
 {
 	if (curr == NULL)
 		return;
 
-	createDotFile(curr->left, fp);
-	int leftData = (curr->left == NULL) ? -1 : curr->left->key;
-	int rightData = (curr->right == NULL) ? -1 : curr->right->key;
-	fprintf(fp, "%d -> {%d, %d};\n", curr->key, leftData, rightData);
-	createDotFile(curr->right, fp);
+	createDotFile(curr->left, fp, nullCounter);
+
+	if (curr->left == NULL)
+	{
+		(*nullCounter)++;
+		fprintf(fp, "null%d [shape=point];\n", *nullCounter);
+		fprintf(fp, "%d -> null%d;\n", curr->key, *nullCounter);
+	}
+	else
+		fprintf(fp, "%d -> %d;\n", curr->key, curr->left->key);
+
+	if (curr->right == NULL)
+	{
+		(*nullCounter)++;
+		fprintf(fp, "null%d [shape=point];\n", *nullCounter);
+		fprintf(fp, "%d -> null%d;\n", curr->key, *nullCounter);
+	}
+	else
+		fprintf(fp, "%d -> %d;\n", curr->key, curr->right->key);
+
+	createDotFile(curr->right, fp, nullCounter);
 }
 
 static void runSearch(Tree t, int argc, char **argv)

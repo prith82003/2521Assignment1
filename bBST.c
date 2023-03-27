@@ -529,8 +529,8 @@ static Node NodeLCA(Node curr, int a, int b)
 
 	if (ALeft != BLeft || isA || isB)
 		return curr;
-	int checkVal = (a < b) ? ALeft : BLeft;
-	return (checkVal) ? NodeLCA(curr->left, a, b) : NodeLCA(curr->right, a, b);
+	// int checkVal = (a < b) ? ALeft : BLeft;
+	return (ALeft) ? NodeLCA(curr->left, a, b) : NodeLCA(curr->right, a, b);
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -636,28 +636,18 @@ static void NodeSearchBetween(Node curr, int lower, int upper, List l)
 	bool isBelow = curr->key <= upper;
 	bool isBetween = isAbove && isBelow;
 
-	// printf("Current: %d\n IsAbove: %d\n IsBelow: %d\n IsBetween: %d\n", curr->key, isAbove, isBelow, isBetween);
-
 	if (isBetween)
 	{
 		NodeSearchBetween(curr->left, lower, upper, l);
 		ListAppend(l, curr->key);
 		NodeSearchBetween(curr->right, lower, upper, l);
+		return;
 	}
 
-	if (!isBetween)
-	{
-		if (lower <= curr->key)
-			NodeSearchBetween(curr->left, lower, upper, l);
-		if (upper >= curr->key)
-			NodeSearchBetween(curr->right, lower, upper, l);
-	}
-
-	// if (!isBelow && curr->left->key <= upper)
-	// {
-	// 	printf("Current: %d\nLeft: %d\n", curr->key, curr->left->key);
-	// 	NodeSearchBetween(curr->left, lower, upper, l);
-	// }
+	if (lower <= curr->key)
+		NodeSearchBetween(curr->left, lower, upper, l);
+	if (upper >= curr->key)
+		NodeSearchBetween(curr->right, lower, upper, l);
 }
 
 ////////////////////////////////////////////////////////////////////////
